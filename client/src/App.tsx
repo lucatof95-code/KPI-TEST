@@ -12,6 +12,7 @@ import Assignments from './pages/master/Assignments'
 import Problems from './pages/master/Problems'
 import Reports from './pages/master/Reports'
 import MyActivities from './pages/user/MyActivities'
+import Settings from './pages/master/Settings'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -66,6 +67,7 @@ export default function App() {
                     <Route path="assignments" element={<Assignments />} />
                     <Route path="problems" element={<Problems />} />
                     <Route path="reports" element={<Reports />} />
+                    <Route path="settings" element={<Settings />} />
                   </Routes>
                 </RequireMaster>
               }

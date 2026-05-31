@@ -192,6 +192,21 @@ async function main() {
   })
   await prisma.assignment.update({ where: { id: asgCara1.id }, data: { stato: 'SVOLTA' } })
 
+  // Default settings
+  const defaultSettings: Record<string, string> = {
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_secure: 'false',
+    smtp_user: '',
+    smtp_pass: '',
+    smtp_from_name: 'KPI Formazione ERP',
+    smtp_from_email: '',
+    app_url: 'http://localhost:5173',
+  }
+  for (const [key, value] of Object.entries(defaultSettings)) {
+    await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } })
+  }
+
   console.log('✅ Seed completato!')
   console.log('  Master: master@kpi.test / master123')
   console.log('  Alice:  alice@kpi.test  / user123')

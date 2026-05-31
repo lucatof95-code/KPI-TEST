@@ -8,6 +8,7 @@ import { Input } from '../../components/ui/Input'
 import { Modal } from '../../components/ui/Modal'
 import { StatusBadge } from '../../components/ui/Badge'
 import { useGlobalToast } from '../../components/layout/Layout'
+import { CalendarEventInput } from '../../types'
 
 const today = new Date().toISOString().split('T')[0]
 
@@ -23,6 +24,14 @@ export default function Assignments() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [confirmNotify, setConfirmNotify] = useState(false)
+  const [withCalendar, setWithCalendar] = useState(false)
+  const [calEvent, setCalEvent] = useState<CalendarEventInput>({
+    title: 'Sessione formazione ERP',
+    date: new Date().toISOString().split('T')[0],
+    startTime: '09:00',
+    endTime: '10:00',
+    location: '',
+  })
   const [form, setForm] = useState({ activityId: '', userId: '', sessionId: '', dataScadenza: today })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [deleteId, setDeleteId] = useState<number | null>(null)
@@ -110,7 +119,10 @@ export default function Assignments() {
   })
 
   const notify = useMutation({
-    mutationFn: () => assignmentsApi.notify(Array.from(selected)),
+    mutationFn: () => assignmentsApi.notify(
+      Array.from(selected),
+      withCalendar ? calEvent : undefined,
+    ),
     onSuccess: (res) => {
       setConfirmNotify(false)
       setSelected(new Set())
@@ -260,35 +272,89 @@ export default function Assignments() {
       <Modal
         isOpen={confirmNotify}
         onClose={() => setConfirmNotify(false)}
-        title="Conferma invio notifica"
-        size="md"
+        title="Invia notifica attività"
+        size="lg"
       >
-        <p className="text-gray-400 text-sm mb-4">
-          Verrà inviata <strong className="text-gray-200">una email per ogni utente</strong>, con tutte le sue attività selezionate.
+        {/* Recipients preview */}
+        <p className="text-gray-400 text-sm mb-3">
+          Verrà inviata <strong className="text-gray-200">una email per ogni utente</strong> con il riepilogo delle sue attività assegnate.
         </p>
-        <div className="flex flex-col gap-3 mb-6">
+        <div className="flex flex-col gap-2 mb-5">
           {byUser.map(({ user, items }) => (
             <div key={user.id} className="bg-gray-800 rounded-lg px-4 py-3">
               <p className="text-sm font-medium text-gray-200 mb-1">
                 📧 {user.email}
                 <span className="text-gray-500 ml-2 font-normal">({user.cognome} {user.nome})</span>
               </p>
-              <ul className="flex flex-col gap-0.5">
+              <div className="flex flex-wrap gap-1.5 mt-1">
                 {items.map((a) => (
-                  <li key={a.id} className="text-xs text-gray-400 flex items-center gap-2">
+                  <span key={a.id} className="flex items-center gap-1 text-xs text-gray-400">
                     <StatusBadge stato={a.activity.tipo} />
                     {a.activity.nome}
-                    <span className="text-gray-600">· scad. {new Date(a.dataScadenza).toLocaleDateString('it-IT')}</span>
-                  </li>
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
           ))}
         </div>
+
+        {/* Calendar option */}
+        <div className="border border-gray-800 rounded-xl overflow-hidden mb-5">
+          <button
+            type="button"
+            onClick={() => setWithCalendar((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-gray-800/60 hover:bg-gray-800 transition-colors text-sm"
+          >
+            <span className="flex items-center gap-2 font-medium text-gray-200">
+              📅 Aggiungi appuntamento calendario (Outlook)
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${withCalendar ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
+              {withCalendar ? 'Attivo' : 'Facoltativo'}
+            </span>
+          </button>
+          {withCalendar && (
+            <div className="px-4 py-4 grid grid-cols-2 gap-3 bg-gray-900">
+              <Input
+                label="Titolo evento"
+                value={calEvent.title}
+                onChange={(e) => setCalEvent((c) => ({ ...c, title: e.target.value }))}
+                className="col-span-2"
+              />
+              <Input
+                label="Data"
+                type="date"
+                value={calEvent.date}
+                onChange={(e) => setCalEvent((c) => ({ ...c, date: e.target.value }))}
+              />
+              <Input
+                label="Luogo (opzionale)"
+                placeholder="Sala riunioni / Teams link…"
+                value={calEvent.location || ''}
+                onChange={(e) => setCalEvent((c) => ({ ...c, location: e.target.value }))}
+              />
+              <Input
+                label="Ora inizio"
+                type="time"
+                value={calEvent.startTime}
+                onChange={(e) => setCalEvent((c) => ({ ...c, startTime: e.target.value }))}
+              />
+              <Input
+                label="Ora fine"
+                type="time"
+                value={calEvent.endTime}
+                onChange={(e) => setCalEvent((c) => ({ ...c, endTime: e.target.value }))}
+              />
+              <p className="col-span-2 text-xs text-gray-500">
+                L'utente riceverà un file .ics nell'email: aprendo l'allegato Outlook aggiungerà l'appuntamento al calendario.
+              </p>
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-2 justify-end">
           <Button variant="secondary" onClick={() => setConfirmNotify(false)}>Annulla</Button>
           <Button isLoading={notify.isPending} onClick={() => notify.mutate()}>
-            Invia {byUser.length} email
+            Invia {byUser.length} email{withCalendar ? ' + calendario' : ''}
           </Button>
         </div>
       </Modal>

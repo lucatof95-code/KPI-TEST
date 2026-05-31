@@ -89,6 +89,25 @@ export interface ProblemGroup {
   problems: Report[]
 }
 
+export interface AppSettings {
+  smtp_host: string
+  smtp_port: string
+  smtp_secure: string
+  smtp_user: string
+  smtp_pass: string
+  smtp_from_name: string
+  smtp_from_email: string
+  app_url: string
+}
+
+export interface CalendarEventInput {
+  title: string
+  date: string
+  startTime: string
+  endTime: string
+  location?: string
+}
+
 export interface MyAssignmentsResponse {
   assignments: Assignment[]
   sessionLocked: Record<number, boolean>

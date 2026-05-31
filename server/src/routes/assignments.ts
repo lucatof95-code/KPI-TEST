@@ -1,7 +1,7 @@
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
-import { sendMail, buildAssignmentEmail } from '../lib/mailer'
+import { sendMail, buildNotificationEmail, generateICS, loadSettings } from '../lib/mailer'
 import { authenticate, requireMaster, AuthRequest } from '../middleware/auth'
 
 const router = Router()
@@ -96,27 +96,36 @@ router.post('/', requireMaster, async (req: AuthRequest, res: Response) => {
 })
 
 // Master: send notification emails for selected assignments (one email per user)
+const calendarEventSchema = z.object({
+  title: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  location: z.string().optional(),
+}).optional()
+
 const notifySchema = z.object({
   assignmentIds: z.array(z.number().int()).min(1, 'Seleziona almeno un\'assegnazione'),
+  calendarEvent: calendarEventSchema,
 })
 
 router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) => {
   const parsed = notifySchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
 
+  const { assignmentIds, calendarEvent } = parsed.data
+
   const assignments = await prisma.assignment.findMany({
-    where: { id: { in: parsed.data.assignmentIds } },
-    include: {
-      user: true,
-      activity: true,
-      session: true,
-    },
+    where: { id: { in: assignmentIds } },
+    include: { user: true, activity: true, session: true },
   })
 
   if (assignments.length === 0) {
     res.status(404).json({ error: 'Assegnazioni non trovate' })
     return
   }
+
+  const cfg = await loadSettings()
 
   // Group by user
   const byUser = new Map<number, typeof assignments>()
@@ -126,26 +135,37 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
     byUser.set(a.userId, group)
   }
 
-  const appUrl = process.env.APP_URL || 'http://localhost:5173'
+  // Build ICS once (same event for all recipients)
+  let icsContent: string | undefined
+  if (calendarEvent) {
+    const [sy, sm, sd] = calendarEvent.date.split('-').map(Number)
+    const [sh, smin] = calendarEvent.startTime.split(':').map(Number)
+    const [eh, emin] = calendarEvent.endTime.split(':').map(Number)
+    const start = new Date(Date.UTC(sy, sm - 1, sd, sh, smin))
+    const end = new Date(Date.UTC(sy, sm - 1, sd, eh, emin))
+    icsContent = generateICS({
+      title: calendarEvent.title,
+      description: `Sessione di formazione ERP — ${calendarEvent.title}`,
+      location: calendarEvent.location,
+      start,
+      end,
+      organizerName: cfg.fromName,
+      organizerEmail: cfg.fromEmail || cfg.user,
+    })
+  }
+
   const results: { userId: number; email: string; ok: boolean; error?: string }[] = []
 
   for (const [, userAssignments] of byUser) {
     const user = userAssignments[0].user
-    const emailData = buildAssignmentEmail(
-      user.nome,
-      user.cognome,
-      userAssignments.map((a) => ({
-        nome: a.activity.nome,
-        tipo: a.activity.tipo,
-        sessione: a.session.nome,
-        scadenza: new Date(a.dataScadenza).toLocaleDateString('it-IT'),
-        descrizione: a.activity.descrizione,
-      })),
-      appUrl,
-    )
+    const counts = {
+      formazione: userAssignments.filter((a) => a.activity.tipo === 'FORMAZIONE').length,
+      test: userAssignments.filter((a) => a.activity.tipo === 'TEST').length,
+    }
+    const emailData = buildNotificationEmail(user.nome, user.cognome, counts, cfg.appUrl, cfg.fromName)
 
     try {
-      await sendMail({ to: user.email, ...emailData })
+      await sendMail({ to: user.email, ...emailData, icsAttachment: icsContent })
       results.push({ userId: user.id, email: user.email, ok: true })
     } catch (e) {
       results.push({ userId: user.id, email: user.email, ok: false, error: String(e) })
@@ -156,12 +176,9 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
   const failed = results.filter((r) => !r.ok).length
 
   res.json({
-    sent,
-    failed,
-    total: results.length,
-    results,
+    sent, failed, total: results.length, results,
     message: failed === 0
-      ? `Notifica inviata a ${sent} utent${sent === 1 ? 'e' : 'i'}`
+      ? `Notifica inviata a ${sent} utent${sent === 1 ? 'e' : 'i'}${icsContent ? ' con appuntamento calendario' : ''}`
       : `${sent} email inviate, ${failed} fallite`,
   })
 })

@@ -19,6 +19,7 @@ const masterNav: NavItem[] = [
   { to: '/master/sessions', label: 'Sessioni', icon: '📅' },
   { to: '/master/activities', label: 'Attività', icon: '✏️' },
   { to: '/master/users', label: 'Utenti', icon: '👥' },
+  { to: '/master/settings', label: 'Impostazioni', icon: '⚙️' },
 ]
 
 function UserNav() {

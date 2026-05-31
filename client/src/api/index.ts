@@ -2,6 +2,7 @@ import { apiFetch } from './client'
 import type {
   User, CompetencyArea, Session, Activity,
   Assignment, Report, KpiData, ProblemGroup, MyAssignmentsResponse,
+  AppSettings, CalendarEventInput,
 } from '../types'
 
 // Auth
@@ -69,10 +70,10 @@ export const assignmentsApi = {
   delete: (id: number) => apiFetch<void>(`/api/assignments/${id}`, { method: 'DELETE' }),
   myAssignments: () => apiFetch<MyAssignmentsResponse>('/api/assignments/my'),
   myPendingCount: () => apiFetch<{ pending: number }>('/api/assignments/my/count'),
-  notify: (assignmentIds: number[]) =>
+  notify: (assignmentIds: number[], calendarEvent?: CalendarEventInput) =>
     apiFetch<{ sent: number; failed: number; total: number; message: string }>(
       '/api/assignments/notify',
-      { method: 'POST', body: JSON.stringify({ assignmentIds }) },
+      { method: 'POST', body: JSON.stringify({ assignmentIds, calendarEvent }) },
     ),
 }
 
@@ -107,6 +108,17 @@ export const kpiApi = {
     if (filters?.invertiComplessita) params.set('invertiComplessita', 'true')
     return apiFetch<KpiData>(`/api/kpi?${params}`)
   },
+}
+
+// Settings
+export const settingsApi = {
+  get: () => apiFetch<AppSettings>('/api/settings'),
+  update: (data: Partial<AppSettings>) =>
+    apiFetch<AppSettings>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  testConnection: (to: string) =>
+    apiFetch<{ ok: boolean; message?: string; error?: string }>('/api/settings/test', {
+      method: 'POST', body: JSON.stringify({ to }),
+    }),
 }
 
 // Problems
