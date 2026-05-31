@@ -68,6 +68,12 @@ export const assignmentsApi = {
     apiFetch<Assignment>('/api/assignments', { method: 'POST', body: JSON.stringify(data) }),
   delete: (id: number) => apiFetch<void>(`/api/assignments/${id}`, { method: 'DELETE' }),
   myAssignments: () => apiFetch<MyAssignmentsResponse>('/api/assignments/my'),
+  myPendingCount: () => apiFetch<{ pending: number }>('/api/assignments/my/count'),
+  notify: (assignmentIds: number[]) =>
+    apiFetch<{ sent: number; failed: number; total: number; message: string }>(
+      '/api/assignments/notify',
+      { method: 'POST', body: JSON.stringify({ assignmentIds }) },
+    ),
 }
 
 // Reports

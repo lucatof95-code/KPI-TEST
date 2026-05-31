@@ -1,10 +1,13 @@
 import { NavLink } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
+import { assignmentsApi } from '../../api'
 
 interface NavItem {
   to: string
   label: string
   icon: string
+  badge?: number
 }
 
 const masterNav: NavItem[] = [
@@ -18,13 +21,48 @@ const masterNav: NavItem[] = [
   { to: '/master/users', label: 'Utenti', icon: '👥' },
 ]
 
-const userNav: NavItem[] = [
-  { to: '/user/activities', label: 'Le mie attività', icon: '📋' },
-]
+function UserNav() {
+  const { data } = useQuery({
+    queryKey: ['my-pending-count'],
+    queryFn: assignmentsApi.myPendingCount,
+    refetchInterval: 60_000,
+  })
+  const pending = data?.pending ?? 0
+
+  const nav: NavItem[] = [
+    { to: '/user/activities', label: 'Le mie attività', icon: '📋', badge: pending },
+  ]
+
+  return (
+    <>
+      {nav.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              isActive
+                ? 'bg-blue-600/20 text-blue-400 font-medium'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+            }`
+          }
+        >
+          <span>{item.icon}</span>
+          <span className="flex-1">{item.label}</span>
+          {item.badge !== undefined && item.badge > 0 && (
+            <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none">
+              {item.badge > 99 ? '99+' : item.badge}
+            </span>
+          )}
+        </NavLink>
+      ))}
+    </>
+  )
+}
 
 export function Sidebar() {
   const { user, logout } = useAuth()
-  const nav = user?.ruolo === 'MASTER' ? masterNav : userNav
+  const isMaster = user?.ruolo === 'MASTER'
 
   return (
     <aside className="w-60 min-h-screen bg-gray-950 border-r border-gray-800 flex flex-col">
@@ -41,22 +79,24 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5">
-        {nav.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                isActive
-                  ? 'bg-blue-600/20 text-blue-400 font-medium'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
-              }`
-            }
-          >
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+        {isMaster
+          ? masterNav.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? 'bg-blue-600/20 text-blue-400 font-medium'
+                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  }`
+                }
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </NavLink>
+            ))
+          : <UserNav />}
       </nav>
 
       {/* User */}
