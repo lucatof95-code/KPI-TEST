@@ -57,9 +57,21 @@ router.put('/:id', requireMaster, async (req: AuthRequest, res: Response) => {
 router.delete('/:id', requireMaster, async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id)
   try {
+    const assignmentCount = await prisma.assignment.count({ where: { activityId: id } })
+    if (assignmentCount > 0) {
+      res.status(409).json({
+        error: `Impossibile eliminare: questa attività ha ${assignmentCount} assegnazion${assignmentCount === 1 ? 'e' : 'i'} collegate. Rimuovile prima dalla pagina Assegnazioni.`,
+      })
+      return
+    }
     await prisma.activity.delete({ where: { id } })
     res.status(204).send()
-  } catch { res.status(404).json({ error: 'Attività non trovata' }) }
+  } catch (e) {
+    const err = e as { code?: string }
+    res.status(err.code === 'P2025' ? 404 : 500).json({
+      error: err.code === 'P2025' ? 'Attività non trovata' : 'Errore durante l\'eliminazione',
+    })
+  }
 })
 
 export default router
