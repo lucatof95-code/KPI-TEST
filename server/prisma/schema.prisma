@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  nome         String
+  cognome      String
+  email        String       @unique
+  passwordHash String
+  ruolo        String       @default("USER")
+  assignments  Assignment[]
+  reports      Report[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model CompetencyArea {
+  id         Int                      @id @default(autoincrement())
+  nome       String
+  importanza Int                      @default(3)
+  activities ActivityCompetencyArea[]
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+}
+
+model Session {
+  id          Int          @id @default(autoincrement())
+  nome        String
+  ordine      Int
+  assignments Assignment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Activity {
+  id          Int                      @id @default(autoincrement())
+  nome        String
+  descrizione String
+  tipo        String
+  areas       ActivityCompetencyArea[]
+  assignments Assignment[]
+  reports     Report[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+}
+
+model ActivityCompetencyArea {
+  activityId       Int
+  competencyAreaId Int
+  activity         Activity       @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  competencyArea   CompetencyArea @relation(fields: [competencyAreaId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, competencyAreaId])
+}
+
+model Assignment {
+  id           Int        @id @default(autoincrement())
+  activityId   Int
+  userId       Int
+  sessionId    Int
+  dataScadenza DateTime
+  stato        String     @default("DA_SVOLGERE")
+  activity     Activity   @relation(fields: [activityId], references: [id])
+  user         User       @relation(fields: [userId], references: [id])
+  session      Session    @relation(fields: [sessionId], references: [id])
+  report       Report?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([activityId, userId, sessionId])
+}
+
+model Report {
+  id                      Int        @id @default(autoincrement())
+  assignmentId            Int        @unique
+  userId                  Int
+  activityId              Int
+  dataInvio               DateTime   @default(now())
+  obiettivo               Int
+  complessita             Int
+  confrontoVecchioERP     Int
+  miglioramentoEfficienza Int
+  haProblemi              Boolean    @default(false)
+  descrizioneProblema     String?
+  richiedeNuovaFormazione Boolean    @default(false)
+  giudizioApprendimento   Int?
+  statoRisoluzione        String     @default("APERTO")
+  assignment              Assignment @relation(fields: [assignmentId], references: [id])
+  user                    User       @relation(fields: [userId], references: [id])
+  activity                Activity   @relation(fields: [activityId], references: [id])
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+}
