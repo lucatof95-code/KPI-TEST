@@ -154,12 +154,16 @@ function TestForm({ assignment, onClose, onSuccess }: Props) {
     haProblemi: false, descrizioneProblema: '',
     superato: true, punteggio: 75,
   })
+  const [motivoNonSuperato, setMotivoNonSuperato] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const set = <K extends keyof TestState>(k: K, v: TestState[K]) => setForm((f) => ({ ...f, [k]: v }))
 
   const validate = () => {
     const e: Record<string, string> = {}
-    if (form.haProblemi && !form.descrizioneProblema.trim()) e.descrizioneProblema = 'Descrizione obbligatoria'
+    if (!form.superato && !motivoNonSuperato.trim())
+      e.motivoNonSuperato = 'Specifica il motivo del mancato superamento'
+    if (form.superato && form.haProblemi && !form.descrizioneProblema.trim())
+      e.descrizioneProblema = 'Descrizione obbligatoria'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -169,9 +173,11 @@ function TestForm({ assignment, onClose, onSuccess }: Props) {
       assignmentId: assignment.id,
       obiettivo: form.obiettivo, complessita: form.complessita,
       confrontoVecchioERP: form.confrontoVecchioERP, miglioramentoEfficienza: form.miglioramentoEfficienza,
-      haProblemi: form.haProblemi,
-      descrizioneProblema: form.haProblemi ? form.descrizioneProblema : undefined,
-      // superato → non richiede nuova formazione; punteggio → giudizio apprendimento
+      // Non superato: motivo diventa il descrizioneProblema + haProblemi=true
+      haProblemi: !form.superato ? true : form.haProblemi,
+      descrizioneProblema: !form.superato
+        ? motivoNonSuperato
+        : (form.haProblemi ? form.descrizioneProblema : undefined),
       richiedeNuovaFormazione: !form.superato,
       giudizioApprendimento: form.superato ? form.punteggio : null,
     }),
@@ -194,12 +200,40 @@ function TestForm({ assignment, onClose, onSuccess }: Props) {
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${form.superato ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-emerald-700'}`}>
             Superato
           </button>
-          <button type="button" onClick={() => set('superato', false)}
+          <button type="button" onClick={() => { set('superato', false); set('haProblemi', false) }}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${!form.superato ? 'bg-red-600 text-white border-red-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-red-700'}`}>
             Non superato
           </button>
         </div>
       </div>
+
+      {/* Non superato: motivo obbligatorio + avviso nuovo test */}
+      {!form.superato && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start gap-3 bg-amber-950/40 border border-amber-700/50 rounded-xl px-4 py-3">
+            <span className="text-amber-400 text-lg mt-0.5">⚠️</span>
+            <div>
+              <p className="text-sm font-medium text-amber-300">Nuovo test richiesto</p>
+              <p className="text-xs text-amber-500 mt-0.5">
+                Il mancato superamento verrà segnalato al responsabile. Sarà necessario ripetere il test su questo argomento.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-300">
+              Motivo del mancato superamento <span className="text-red-400">*</span>
+            </label>
+            <textarea
+              value={motivoNonSuperato}
+              onChange={(e) => setMotivoNonSuperato(e.target.value)}
+              rows={3}
+              placeholder="Descrivi perché non è stato possibile superare il test (lacune riscontrate, argomenti da approfondire, difficoltà tecniche…)"
+              className={`bg-gray-800 border rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.motivoNonSuperato ? 'border-red-500' : 'border-gray-700'}`}
+            />
+            {errors.motivoNonSuperato && <p className="text-xs text-red-400">{errors.motivoNonSuperato}</p>}
+          </div>
+        </div>
+      )}
 
       {/* Punteggio solo se superato */}
       {form.superato && (
@@ -230,20 +264,23 @@ function TestForm({ assignment, onClose, onSuccess }: Props) {
           leftLabel="Nessuno" rightLabel="Notevole" />
       </div>
 
-      {/* Problemi */}
-      <div className="space-y-3">
-        <Toggle checked={form.haProblemi} onChange={(v) => set('haProblemi', v)} label="Ho riscontrato problemi" color="red" />
-        {form.haProblemi && (
-          <div className="flex flex-col gap-1">
-            <label className="text-sm text-gray-400">Descrivi il problema</label>
-            <textarea value={form.descrizioneProblema}
-              onChange={(e) => set('descrizioneProblema', e.target.value)}
-              rows={3} placeholder="Descrizione chiara e dettagliata…"
-              className={`bg-gray-800 border rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.descrizioneProblema ? 'border-red-500' : 'border-gray-700'}`} />
-            {errors.descrizioneProblema && <p className="text-xs text-red-400">{errors.descrizioneProblema}</p>}
-          </div>
-        )}
-      </div>
+      {/* Problemi aggiuntivi — solo se superato */}
+      {form.superato && (
+        <div className="space-y-3">
+          <Toggle checked={form.haProblemi} onChange={(v) => set('haProblemi', v)}
+            label="Ho riscontrato problemi durante il test" color="red" />
+          {form.haProblemi && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-gray-400">Descrivi il problema</label>
+              <textarea value={form.descrizioneProblema}
+                onChange={(e) => set('descrizioneProblema', e.target.value)}
+                rows={3} placeholder="Descrizione chiara e dettagliata…"
+                className={`bg-gray-800 border rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.descrizioneProblema ? 'border-red-500' : 'border-gray-700'}`} />
+              {errors.descrizioneProblema && <p className="text-xs text-red-400">{errors.descrizioneProblema}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-3 justify-end pt-2 border-t border-gray-800">
         <Button variant="secondary" onClick={onClose}>Annulla</Button>
