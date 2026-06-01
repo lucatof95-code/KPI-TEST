@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { prisma } from '../lib/prisma'
+import { todayUTC, dateOnly } from '../lib/dateUtils'
 import { authenticate, requireMaster, AuthRequest } from '../middleware/auth'
 
 const router = Router()
@@ -26,10 +27,9 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   // KPI 1: % svolte su assegnate
   const perSvolte = total > 0 ? (svolte / total) * 100 : null
 
-  // KPI 2: % svolte entro oggi
-  const today = new Date()
-  today.setHours(23, 59, 59, 999)
-  const dueToday = assignments.filter((a) => new Date(a.dataScadenza) <= today)
+  // KPI 2: % svolte entro oggi — confronto date-only UTC, sorgente unica: server clock
+  const today = todayUTC()
+  const dueToday = assignments.filter((a) => dateOnly(a.dataScadenza) <= today)
   const doneDueToday = dueToday.filter((a) => a.stato === 'SVOLTA').length
   const perEntroOggi = dueToday.length > 0 ? (doneDueToday / dueToday.length) * 100 : null
 

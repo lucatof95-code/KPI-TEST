@@ -6,10 +6,6 @@ import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import ReportFormModal from './ReportFormModal'
 
-function isLate(a: Assignment) {
-  return a.stato === 'DA_SVOLGERE' && new Date(a.dataScadenza) < new Date(new Date().setHours(0, 0, 0, 0))
-}
-
 export default function MyActivities() {
   const qc = useQueryClient()
   const [reportAssignment, setReportAssignment] = useState<Assignment | null>(null)
@@ -71,7 +67,7 @@ export default function MyActivities() {
           {/* Assignments */}
           <div className="divide-y divide-gray-800">
             {sessAssignments.map((a) => (
-              <div key={a.id} className={`px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 ${isLate(a) ? 'bg-red-950/10' : ''}`}>
+              <div key={a.id} className={`px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 ${a.isLate ? 'bg-red-950/10' : ''}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <StatusBadge stato={a.activity.tipo} />
@@ -86,7 +82,7 @@ export default function MyActivities() {
                   </div>
                 </div>
                 <div className="flex-shrink-0 flex flex-col items-end gap-2">
-                  <span className={`text-xs ${isLate(a) ? 'text-red-400 font-medium' : 'text-gray-500'}`}>
+                  <span className={`text-xs ${a.isLate ? 'text-red-400 font-medium' : 'text-gray-500'}`}>
                     Scadenza: {new Date(a.dataScadenza).toLocaleDateString('it-IT')}
                   </span>
                   {a.stato === 'DA_SVOLGERE' && !locked && (

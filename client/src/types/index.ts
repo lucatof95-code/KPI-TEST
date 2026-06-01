@@ -42,6 +42,8 @@ export interface Assignment {
   sessionId: number
   dataScadenza: string
   stato: AssignmentStatus
+  /** Computed server-side: DA_SVOLGERE and due date < today (UTC). */
+  isLate: boolean
   activity: Activity
   user: Pick<User, 'id' | 'nome' | 'cognome' | 'email'>
   session: Session

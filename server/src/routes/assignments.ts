@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { sendMail, buildNotificationEmail, generateICS, loadSettings } from '../lib/mailer'
 import { authenticate, requireMaster, AuthRequest } from '../middleware/auth'
+import { todayUTC, dateOnly } from '../lib/dateUtils'
 
 const router = Router()
 router.use(authenticate)
@@ -12,6 +13,15 @@ const include = {
   user: { select: { id: true, nome: true, cognome: true, email: true } },
   session: true,
   report: true,
+}
+
+/** Adds server-computed isLate to each assignment. Single source of truth for "today". */
+function withIsLate<T extends { stato: string; dataScadenza: Date }>(assignments: T[]) {
+  const today = todayUTC()
+  return assignments.map((a) => ({
+    ...a,
+    isLate: a.stato === 'DA_SVOLGERE' && dateOnly(a.dataScadenza) < today,
+  }))
 }
 
 // Master: list with filters
@@ -28,7 +38,7 @@ router.get('/', requireMaster, async (req: AuthRequest, res: Response) => {
     include,
     orderBy: [{ dataScadenza: 'asc' }, { id: 'asc' }],
   })
-  res.json(assignments)
+  res.json(withIsLate(assignments))
 })
 
 // User: pending count (badge)
@@ -66,7 +76,7 @@ router.get('/my', async (req: AuthRequest, res: Response) => {
     }
   }
 
-  res.json({ assignments, sessionLocked, sessions })
+  res.json({ assignments: withIsLate(assignments), sessionLocked, sessions })
 })
 
 const createSchema = z.object({
@@ -80,11 +90,11 @@ router.post('/', requireMaster, async (req: AuthRequest, res: Response) => {
   const parsed = createSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
   try {
-    const assignment = await prisma.assignment.create({
+    const raw = await prisma.assignment.create({
       data: { ...parsed.data, dataScadenza: new Date(parsed.data.dataScadenza) },
       include,
     })
-    res.status(201).json(assignment)
+    res.status(201).json(withIsLate([raw])[0])
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : ''
     if (msg.includes('Unique constraint')) {

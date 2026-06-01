@@ -10,11 +10,8 @@ import { StatusBadge } from '../../components/ui/Badge'
 import { useGlobalToast } from '../../components/layout/Layout'
 import { CalendarEventInput } from '../../types'
 
+// Default date for the new-assignment form (browser local date, display only — no logic)
 const today = new Date().toISOString().split('T')[0]
-
-function isLate(a: Assignment) {
-  return a.stato === 'DA_SVOLGERE' && new Date(a.dataScadenza) < new Date(new Date().setHours(0, 0, 0, 0))
-}
 
 export default function Assignments() {
   const qc = useQueryClient()
@@ -50,7 +47,7 @@ export default function Assignments() {
   const { data: activities = [] } = useQuery({ queryKey: ['activities'], queryFn: activitiesApi.list })
   const { data: areas = [] } = useQuery({ queryKey: ['areas'], queryFn: areasApi.list })
 
-  const lateCount = assignments.filter(isLate).length
+  const lateCount = assignments.filter((a) => a.isLate).length
 
   // Selection helpers
   const toggleOne = (id: number) => {
@@ -208,7 +205,7 @@ export default function Assignments() {
             </thead>
             <tbody>
               {assignments.map((a) => {
-                const late = isLate(a)
+                const late = a.isLate
                 const isChecked = selected.has(a.id)
                 return (
                   <tr
