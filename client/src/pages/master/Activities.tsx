@@ -18,11 +18,28 @@ export default function Activities() {
   const { data: activities = [], isLoading } = useQuery({ queryKey: ['activities'], queryFn: activitiesApi.list })
   const { data: areas = [] } = useQuery({ queryKey: ['areas'], queryFn: areasApi.list })
 
+  const [filterTipo, setFilterTipo] = useState('')
+  const [filterAreaId, setFilterAreaId] = useState('')
+  const [filterText, setFilterText] = useState('')
+
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Activity | null>(null)
   const [form, setForm] = useState<ActivityForm>(empty)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const filtered = activities.filter((a) => {
+    if (filterTipo && a.tipo !== filterTipo) return false
+    if (filterAreaId && !a.areas.some((x) => x.competencyAreaId === Number(filterAreaId))) return false
+    if (filterText) {
+      const q = filterText.toLowerCase()
+      if (!a.nome.toLowerCase().includes(q) && !a.descrizione.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  const hasFilters = !!(filterTipo || filterAreaId || filterText)
+  const clearFilters = () => { setFilterTipo(''); setFilterAreaId(''); setFilterText('') }
 
   const openCreate = () => { setEditing(null); setForm(empty); setErrors({}); setModalOpen(true) }
   const openEdit = (a: Activity) => {
@@ -62,19 +79,52 @@ export default function Activities() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-100">Attività</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{activities.length} attività configurate</p>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {hasFilters
+              ? <>{filtered.length} di {activities.length} attività</>
+              : <>{activities.length} attività configurate</>}
+          </p>
         </div>
         <Button onClick={openCreate}>+ Nuova attività</Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-5">
+        <Input
+          placeholder="Cerca per nome o descrizione…"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          className="flex-1 min-w-48"
+        />
+        <Select
+          value={filterTipo}
+          onChange={(e) => setFilterTipo(e.target.value)}
+          options={[{ value: 'FORMAZIONE', label: 'Formazione' }, { value: 'TEST', label: 'Test' }]}
+          placeholder="Tutti i tipi"
+          className="w-44"
+        />
+        <Select
+          value={filterAreaId}
+          onChange={(e) => setFilterAreaId(e.target.value)}
+          options={areas.map((a) => ({ value: a.id, label: a.nome }))}
+          placeholder="Tutte le aree"
+          className="w-56"
+        />
+        {hasFilters && (
+          <Button variant="ghost" size="md" onClick={clearFilters}>
+            ✕ Azzera filtri
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
       ) : (
         <div className="grid gap-3">
-          {activities.map((act) => (
+          {filtered.map((act) => (
             <div key={act.id} className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -96,7 +146,11 @@ export default function Activities() {
               </div>
             </div>
           ))}
-          {activities.length === 0 && <div className="text-center py-16 text-gray-500">Nessuna attività configurata</div>}
+          {filtered.length === 0 && (
+            <div className="text-center py-16 text-gray-500">
+              {hasFilters ? 'Nessuna attività corrisponde ai filtri selezionati' : 'Nessuna attività configurata'}
+            </div>
+          )}
         </div>
       )}
 
