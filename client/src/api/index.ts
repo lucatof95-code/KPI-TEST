@@ -114,6 +114,7 @@ export const kpiApi = {
 
 // Processes
 export const processesApi = {
+  my: () => apiFetch<import('../types').UserProcess[]>('/api/processes/my'),
   list: () => apiFetch<Process[]>('/api/processes'),
   get: (id: number) => apiFetch<Process>(`/api/processes/${id}`),
   create: (data: { nome: string; descrizione: string }) =>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { assignmentsApi } from '../../api'
-import { Assignment } from '../../types'
+import { assignmentsApi, processesApi } from '../../api'
+import { Assignment, UserProcessStep } from '../../types'
 import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import ReportFormModal from './ReportFormModal'
@@ -52,6 +52,12 @@ function AssignmentRow({
 
 // ── Main page ─────────────────────────────────────────────────────────────
 
+// Fake assignment object for process steps that have an assignmentId
+function stepToFakeAssignment(step: UserProcessStep, assignmentsById: Map<number, Assignment>): Assignment | null {
+  if (!step.assignmentId) return null
+  return assignmentsById.get(step.assignmentId) ?? null
+}
+
 export default function MyActivities() {
   const qc = useQueryClient()
   const [reportAssignment, setReportAssignment] = useState<Assignment | null>(null)
@@ -60,8 +66,12 @@ export default function MyActivities() {
     queryKey: ['my-assignments'],
     queryFn: assignmentsApi.myAssignments,
   })
+  const { data: myProcesses = [], isLoading: loadingProcesses } = useQuery({
+    queryKey: ['my-processes'],
+    queryFn: processesApi.my,
+  })
 
-  if (isLoading) {
+  if (isLoading || loadingProcesses) {
     return (
       <div className="flex justify-center py-20">
         <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -71,32 +81,24 @@ export default function MyActivities() {
 
   const { assignments = [], sessionLocked = {}, sessions = [] } = data || {}
 
-  // Split: assignments with session vs process/standalone
-  const withSession    = assignments.filter((a) => a.sessionId !== null)
-  const withoutSession = assignments.filter((a) => a.sessionId === null)
+  // Map assignments by id for quick lookup
+  const assignmentsById = new Map(assignments.map((a) => [a.id, a]))
 
-  // Group session assignments
+  // Session-based assignments
+  const withSession = assignments.filter((a) => a.sessionId !== null)
   const bySession = sessions.map((sess) => ({
     session: sess,
     assignments: withSession.filter((a) => a.sessionId === sess.id),
     locked: sessionLocked[sess.id] || false,
   })).filter((g) => g.assignments.length > 0)
 
-  // Group process assignments by process name
-  const processGroups: Map<string, { processName: string; processId: number; items: Assignment[] }> = new Map()
-  for (const a of withoutSession) {
-    if (a.processStepUser) {
-      const proc = a.processStepUser.processStep.process
-      const key = String(proc.id)
-      if (!processGroups.has(key)) {
-        processGroups.set(key, { processName: proc.nome, processId: proc.id, items: [] })
-      }
-      processGroups.get(key)!.items.push(a)
-    }
-  }
-
-  // Standalone assignments (no session, no process)
-  const standalone = withoutSession.filter((a) => !a.processStepUser)
+  // Standalone (no session, no process)
+  const processAssignmentIds = new Set(
+    myProcesses.flatMap((p) => p.mySteps.map((s) => s.assignmentId)).filter(Boolean)
+  )
+  const standalone = assignments.filter(
+    (a) => a.sessionId === null && !processAssignmentIds.has(a.id)
+  )
 
   const totalVisible = assignments.length
 
@@ -148,41 +150,86 @@ export default function MyActivities() {
       ))}
 
       {/* ── Processi ─────────────────────────────────────────────────── */}
-      {[...processGroups.values()].map(({ processName, processId, items }) => {
-        const done = items.filter((a) => a.stato === 'SVOLTA').length
-        // Sort by process step ordine (available via processStepUser)
-        const sorted = [...items].sort((a, b) => {
-          const oa = (a.processStepUser as { processStep: { ordine: number } } | null)?.processStep?.ordine ?? 0
-          const ob = (b.processStepUser as { processStep: { ordine: number } } | null)?.processStep?.ordine ?? 0
-          return oa - ob
-        })
+      {myProcesses.map(({ process: proc, mySteps }) => {
+        const done = mySteps.filter((s) => s.assignmentStato === 'SVOLTA').length
+        const total = mySteps.length
         return (
-          <div key={processId} className="bg-gray-900 border border-indigo-800/50 rounded-xl overflow-hidden">
+          <div key={proc.id} className="bg-gray-900 border border-indigo-800/50 rounded-xl overflow-hidden">
+            {/* Header */}
             <div className="px-5 py-4 border-b border-indigo-800/30 bg-indigo-950/30 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-sm">
                   🔄
                 </div>
                 <div>
-                  <h2 className="font-semibold text-gray-100">{processName}</h2>
-                  <p className="text-xs text-gray-500">{done} / {items.length} step completati</p>
+                  <h2 className="font-semibold text-gray-100">{proc.nome}</h2>
+                  <p className="text-xs text-gray-500">{done} / {total} step completati</p>
                 </div>
               </div>
-              {/* Progress bar */}
               <div className="hidden sm:flex items-center gap-2 w-32">
                 <div className="flex-1 bg-gray-800 rounded-full h-1.5">
-                  <div
-                    className="bg-indigo-500 h-1.5 rounded-full transition-all"
-                    style={{ width: `${items.length > 0 ? (done / items.length) * 100 : 0}%` }}
-                  />
+                  <div className="bg-indigo-500 h-1.5 rounded-full transition-all"
+                    style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }} />
                 </div>
-                <span className="text-xs text-gray-500 font-mono">{done}/{items.length}</span>
+                <span className="text-xs text-gray-500 font-mono">{done}/{total}</span>
               </div>
             </div>
+
+            {/* Steps */}
             <div className="divide-y divide-gray-800">
-              {sorted.map((a) => (
-                <AssignmentRow key={a.id} a={a} onReport={setReportAssignment} />
-              ))}
+              {mySteps.map((step) => {
+                const assignment = step.assignmentId ? stepToFakeAssignment(step, assignmentsById) : null
+                const isBlocked  = step.statoStep === 'BLOCCATO'
+                const isCompleted = step.assignmentStato === 'SVOLTA'
+
+                return (
+                  <div key={step.stepId} className={`px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 ${step.isLate ? 'bg-red-950/10' : ''} ${isBlocked ? 'opacity-60' : ''}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        {/* Step indicator */}
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                          isCompleted ? 'bg-emerald-600 text-white' :
+                          isBlocked   ? 'bg-gray-700 text-gray-500' :
+                                        'bg-blue-600 text-white'
+                        }`}>
+                          {isCompleted ? '✓' : step.ordine}
+                        </span>
+                        <StatusBadge stato={step.activity.tipo} />
+                        <span className={`font-medium ${isBlocked ? 'text-gray-500' : 'text-gray-100'}`}>
+                          {step.activity.nome}
+                        </span>
+                        {isCompleted && <span className="text-emerald-400 text-xs">✓ Completata</span>}
+                      </div>
+                      <p className={`text-sm ${isBlocked ? 'text-gray-600' : 'text-gray-500'} line-clamp-2`}>
+                        {step.activity.descrizione}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {step.activity.areas.map((area: { competencyAreaId: number; competencyArea: { nome: string } }) => (
+                          <span key={area.competencyAreaId} className="bg-gray-800 text-gray-500 text-xs px-2 py-0.5 rounded-full">
+                            {area.competencyArea.nome}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 flex flex-col items-end gap-2">
+                      {step.dataScadenza && (
+                        <span className={`text-xs ${step.isLate ? 'text-red-400 font-medium' : 'text-gray-500'}`}>
+                          Scadenza: {new Date(step.dataScadenza).toLocaleDateString('it-IT')}
+                        </span>
+                      )}
+                      {isBlocked && (
+                        <span className="text-xs text-gray-600 italic">In attesa dello step precedente</span>
+                      )}
+                      {!isBlocked && !isCompleted && assignment && (
+                        <Button size="sm" onClick={() => setReportAssignment(assignment)}>
+                          Completa e invia report
+                        </Button>
+                      )}
+                      {isCompleted && <StatusBadge stato="SVOLTA" />}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )
@@ -211,6 +258,7 @@ export default function MyActivities() {
             setReportAssignment(null)
             qc.invalidateQueries({ queryKey: ['my-assignments'] })
             qc.invalidateQueries({ queryKey: ['my-pending-count'] })
+            qc.invalidateQueries({ queryKey: ['my-processes'] })
           }}
         />
       )}

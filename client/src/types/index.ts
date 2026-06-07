@@ -141,6 +141,22 @@ export interface CalendarEventInput {
   location?: string
 }
 
+export interface UserProcessStep {
+  stepId: number
+  ordine: number
+  statoStep: 'BLOCCATO' | 'IN_CORSO' | 'COMPLETATO'
+  dataScadenza: string | null
+  activity: Activity
+  assignmentId: number | null
+  assignmentStato: AssignmentStatus | null
+  isLate: boolean
+}
+
+export interface UserProcess {
+  process: { id: number; nome: string; descrizione: string; stato: string }
+  mySteps: UserProcessStep[]
+}
+
 export interface MyAssignmentsResponse {
   assignments: Assignment[]
   sessionLocked: Record<number, boolean>

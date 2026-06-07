@@ -4,7 +4,79 @@ import { prisma } from '../lib/prisma'
 import { authenticate, requireMaster, AuthRequest } from '../middleware/auth'
 
 const router = Router()
-router.use(authenticate, requireMaster)
+
+// ── User: processi di cui fa parte ───────────────────────────────────────────
+// Registrato PRIMA di requireMaster perché è accessibile da tutti gli utenti.
+
+router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId
+
+  // Trova tutti i ProcessStepUser dell'utente con tutto il contesto necessario
+  const psus = await prisma.processStepUser.findMany({
+    where: { userId },
+    include: {
+      assignment: {
+        include: { activity: { include: { areas: { include: { competencyArea: true } } } } },
+      },
+      processStep: {
+        include: {
+          activity: { include: { areas: { include: { competencyArea: true } } } },
+          process: {
+            include: {
+              steps: { orderBy: { ordine: 'asc' } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { processStep: { ordine: 'asc' } },
+  })
+
+  // Raggruppa per processo
+  const processMap = new Map<number, {
+    process: { id: number; nome: string; descrizione: string; stato: string }
+    mySteps: {
+      stepId: number
+      ordine: number
+      statoStep: string
+      dataScadenza: string | null
+      activity: object
+      assignmentId: number | null
+      assignmentStato: string | null
+      isLate: boolean
+    }[]
+  }>()
+
+  const { todayUTC, dateOnly } = await import('../lib/dateUtils')
+  const today = todayUTC()
+
+  for (const psu of psus) {
+    const proc = psu.processStep.process
+    if (!processMap.has(proc.id)) {
+      processMap.set(proc.id, {
+        process: { id: proc.id, nome: proc.nome, descrizione: proc.descrizione, stato: proc.stato },
+        mySteps: [],
+      })
+    }
+    const asgn = psu.assignment
+    processMap.get(proc.id)!.mySteps.push({
+      stepId: psu.processStep.id,
+      ordine: psu.processStep.ordine,
+      statoStep: psu.processStep.stato,
+      dataScadenza: psu.processStep.dataScadenza?.toISOString() ?? null,
+      activity: psu.processStep.activity,
+      assignmentId: asgn?.id ?? null,
+      assignmentStato: asgn?.stato ?? null,
+      isLate: asgn
+        ? asgn.stato === 'DA_SVOLGERE' && dateOnly(asgn.dataScadenza) < today
+        : false,
+    })
+  }
+
+  res.json([...processMap.values()])
+})
+
+router.use(requireMaster)
 
 const stepInclude = {
   activity: { include: { areas: { include: { competencyArea: true } } } },
