@@ -13,7 +13,7 @@ const include = {
   user: { select: { id: true, nome: true, cognome: true, email: true } },
   session: true,
   report: true,
-  processStepUser: { include: { processStep: { include: { process: true } } } },
+  processStepUser: { include: { processStep: { select: { id: true, ordine: true, process: { select: { id: true, nome: true } } } } } },
 }
 
 function withIsLate<T extends { stato: string; dataScadenza: Date }>(assignments: T[]) {

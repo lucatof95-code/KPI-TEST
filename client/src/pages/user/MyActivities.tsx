@@ -6,6 +6,52 @@ import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import ReportFormModal from './ReportFormModal'
 
+// ── Shared assignment row ─────────────────────────────────────────────────
+
+function AssignmentRow({
+  a, locked = false, onReport,
+}: {
+  a: Assignment
+  locked?: boolean
+  onReport: (a: Assignment) => void
+}) {
+  return (
+    <div className={`px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 ${a.isLate ? 'bg-red-950/10' : ''}`}>
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 mb-1">
+          <StatusBadge stato={a.activity.tipo} />
+          <span className={`font-medium ${locked ? 'text-gray-500' : 'text-gray-100'}`}>{a.activity.nome}</span>
+          {a.stato === 'SVOLTA' && <span className="text-emerald-400 text-xs">✓ Completata</span>}
+        </div>
+        <p className={`text-sm ${locked ? 'text-gray-600' : 'text-gray-500'} line-clamp-2`}>
+          {a.activity.descrizione}
+        </p>
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {a.activity.areas.map((area) => (
+            <span key={area.competencyAreaId} className="bg-gray-800 text-gray-500 text-xs px-2 py-0.5 rounded-full">
+              {area.competencyArea.nome}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="flex-shrink-0 flex flex-col items-end gap-2">
+        <span className={`text-xs ${a.isLate ? 'text-red-400 font-medium' : 'text-gray-500'}`}>
+          Scadenza: {new Date(a.dataScadenza).toLocaleDateString('it-IT')}
+        </span>
+        {a.stato === 'DA_SVOLGERE' && !locked && (
+          <Button size="sm" onClick={() => onReport(a)}>Completa e invia report</Button>
+        )}
+        {a.stato === 'DA_SVOLGERE' && locked && (
+          <span className="text-xs text-gray-600 italic">In attesa dello step precedente</span>
+        )}
+        {a.stato === 'SVOLTA' && <StatusBadge stato="SVOLTA" />}
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────
+
 export default function MyActivities() {
   const qc = useQueryClient()
   const [reportAssignment, setReportAssignment] = useState<Assignment | null>(null)
@@ -25,26 +71,56 @@ export default function MyActivities() {
 
   const { assignments = [], sessionLocked = {}, sessions = [] } = data || {}
 
+  // Split: assignments with session vs process/standalone
+  const withSession    = assignments.filter((a) => a.sessionId !== null)
+  const withoutSession = assignments.filter((a) => a.sessionId === null)
+
+  // Group session assignments
   const bySession = sessions.map((sess) => ({
     session: sess,
-    assignments: assignments.filter((a) => a.sessionId === sess.id),
+    assignments: withSession.filter((a) => a.sessionId === sess.id),
     locked: sessionLocked[sess.id] || false,
-  }))
+  })).filter((g) => g.assignments.length > 0)
+
+  // Group process assignments by process name
+  const processGroups: Map<string, { processName: string; processId: number; items: Assignment[] }> = new Map()
+  for (const a of withoutSession) {
+    if (a.processStepUser) {
+      const proc = a.processStepUser.processStep.process
+      const key = String(proc.id)
+      if (!processGroups.has(key)) {
+        processGroups.set(key, { processName: proc.nome, processId: proc.id, items: [] })
+      }
+      processGroups.get(key)!.items.push(a)
+    }
+  }
+
+  // Standalone assignments (no session, no process)
+  const standalone = withoutSession.filter((a) => !a.processStepUser)
+
+  const totalVisible = assignments.length
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-100">Le mie attività</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Completa le sessioni in ordine per sbloccare le successive</p>
+        <p className="text-gray-500 text-sm mt-0.5">
+          {totalVisible === 0
+            ? 'Nessuna attività assegnata'
+            : `${assignments.filter((a) => a.stato === 'SVOLTA').length} / ${totalVisible} completate`}
+        </p>
       </div>
 
-      {bySession.length === 0 && (
+      {totalVisible === 0 && (
         <div className="text-center py-20 text-gray-500">Nessuna attività assegnata</div>
       )}
 
+      {/* ── Sessioni ─────────────────────────────────────────────────── */}
       {bySession.map(({ session, assignments: sessAssignments, locked }) => (
-        <div key={session.id} className={`bg-gray-900 border rounded-xl overflow-hidden transition-opacity ${locked ? 'border-gray-700 opacity-70' : 'border-gray-800'}`}>
-          {/* Session header */}
+        <div
+          key={session.id}
+          className={`bg-gray-900 border rounded-xl overflow-hidden transition-opacity ${locked ? 'border-gray-700 opacity-70' : 'border-gray-800'}`}
+        >
           <div className={`px-5 py-4 border-b flex items-center justify-between ${locked ? 'bg-gray-800/40 border-gray-700' : 'bg-gray-800/60 border-gray-700'}`}>
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-mono font-bold text-sm ${locked ? 'bg-gray-700 text-gray-500' : 'bg-blue-600/20 text-blue-400'}`}>
@@ -59,54 +135,73 @@ export default function MyActivities() {
             </div>
             {locked && (
               <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
-                <span>🔒</span> Sessione bloccata
+                🔒 Sessione bloccata
               </div>
             )}
           </div>
-
-          {/* Assignments */}
           <div className="divide-y divide-gray-800">
             {sessAssignments.map((a) => (
-              <div key={a.id} className={`px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 ${a.isLate ? 'bg-red-950/10' : ''}`}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <StatusBadge stato={a.activity.tipo} />
-                    <span className={`font-medium ${locked ? 'text-gray-500' : 'text-gray-100'}`}>{a.activity.nome}</span>
-                    {a.processStepUser && (
-                      <span className="text-xs bg-indigo-900/50 text-indigo-400 border border-indigo-700/40 px-2 py-0.5 rounded-full">
-                        🔄 {a.processStepUser.processStep.process.nome}
-                      </span>
-                    )}
-                    {a.stato === 'SVOLTA' && <span className="text-emerald-400 text-xs">✓ Completata</span>}
-                  </div>
-                  <p className={`text-sm ${locked ? 'text-gray-600' : 'text-gray-500'} line-clamp-2`}>{a.activity.descrizione}</p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {a.activity.areas.map((area) => (
-                      <span key={area.competencyAreaId} className="bg-gray-800 text-gray-500 text-xs px-2 py-0.5 rounded-full">{area.competencyArea.nome}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex-shrink-0 flex flex-col items-end gap-2">
-                  <span className={`text-xs ${a.isLate ? 'text-red-400 font-medium' : 'text-gray-500'}`}>
-                    Scadenza: {new Date(a.dataScadenza).toLocaleDateString('it-IT')}
-                  </span>
-                  {a.stato === 'DA_SVOLGERE' && !locked && (
-                    <Button size="sm" onClick={() => setReportAssignment(a)}>
-                      Completa e invia report
-                    </Button>
-                  )}
-                  {a.stato === 'DA_SVOLGERE' && locked && (
-                    <span className="text-xs text-gray-600">Sessione precedente non completata</span>
-                  )}
-                  {a.stato === 'SVOLTA' && (
-                    <StatusBadge stato="SVOLTA" />
-                  )}
-                </div>
-              </div>
+              <AssignmentRow key={a.id} a={a} locked={locked} onReport={setReportAssignment} />
             ))}
           </div>
         </div>
       ))}
+
+      {/* ── Processi ─────────────────────────────────────────────────── */}
+      {[...processGroups.values()].map(({ processName, processId, items }) => {
+        const done = items.filter((a) => a.stato === 'SVOLTA').length
+        // Sort by process step ordine (available via processStepUser)
+        const sorted = [...items].sort((a, b) => {
+          const oa = (a.processStepUser as { processStep: { ordine: number } } | null)?.processStep?.ordine ?? 0
+          const ob = (b.processStepUser as { processStep: { ordine: number } } | null)?.processStep?.ordine ?? 0
+          return oa - ob
+        })
+        return (
+          <div key={processId} className="bg-gray-900 border border-indigo-800/50 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-indigo-800/30 bg-indigo-950/30 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-sm">
+                  🔄
+                </div>
+                <div>
+                  <h2 className="font-semibold text-gray-100">{processName}</h2>
+                  <p className="text-xs text-gray-500">{done} / {items.length} step completati</p>
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div className="hidden sm:flex items-center gap-2 w-32">
+                <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                  <div
+                    className="bg-indigo-500 h-1.5 rounded-full transition-all"
+                    style={{ width: `${items.length > 0 ? (done / items.length) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-500 font-mono">{done}/{items.length}</span>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-800">
+              {sorted.map((a) => (
+                <AssignmentRow key={a.id} a={a} onReport={setReportAssignment} />
+              ))}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* ── Attività standalone (no sessione, no processo) ────────────── */}
+      {standalone.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-700 bg-gray-800/60">
+            <h2 className="font-semibold text-gray-100">Altre attività</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{standalone.filter((a) => a.stato === 'SVOLTA').length} / {standalone.length} completate</p>
+          </div>
+          <div className="divide-y divide-gray-800">
+            {standalone.map((a) => (
+              <AssignmentRow key={a.id} a={a} onReport={setReportAssignment} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {reportAssignment && (
         <ReportFormModal
@@ -115,6 +210,7 @@ export default function MyActivities() {
           onSuccess={() => {
             setReportAssignment(null)
             qc.invalidateQueries({ queryKey: ['my-assignments'] })
+            qc.invalidateQueries({ queryKey: ['my-pending-count'] })
           }}
         />
       )}

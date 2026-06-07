@@ -77,7 +77,7 @@ export interface Assignment {
   user: Pick<User, 'id' | 'nome' | 'cognome' | 'email'>
   session: Session | null
   report: Report | null
-  processStepUser: { processStep: { process: Pick<Process, 'id' | 'nome'> } } | null
+  processStepUser: { processStep: { ordine: number; process: Pick<Process, 'id' | 'nome'> } } | null
   createdAt: string
 }
 
