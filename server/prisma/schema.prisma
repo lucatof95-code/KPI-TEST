@@ -97,6 +97,7 @@ model Report {
   richiedeNuovaFormazione Boolean    @default(false)
   giudizioApprendimento   Int?
   statoRisoluzione        String     @default("APERTO")
+  importanzaProblema      Int?
   assignment              Assignment @relation(fields: [assignmentId], references: [id])
   user                    User       @relation(fields: [userId], references: [id])
   activity                Activity   @relation(fields: [activityId], references: [id])

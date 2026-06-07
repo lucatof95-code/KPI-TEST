@@ -66,6 +66,7 @@ export interface Report {
   richiedeNuovaFormazione: boolean
   giudizioApprendimento: number | null
   statoRisoluzione: StatoRisoluzione
+  importanzaProblema: number | null
   user: Pick<User, 'id' | 'nome' | 'cognome'>
   activity: Activity
   assignment: Assignment & { session: Session }

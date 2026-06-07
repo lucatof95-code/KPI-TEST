@@ -131,4 +131,6 @@ export const problemsApi = {
   list: () => apiFetch<ProblemGroup[]>('/api/problems'),
   updateStato: (id: number, statoRisoluzione: string) =>
     apiFetch<Report>(`/api/problems/${id}/stato`, { method: 'PATCH', body: JSON.stringify({ statoRisoluzione }) }),
+  updateImportanza: (id: number, importanzaProblema: number | null) =>
+    apiFetch<Report>(`/api/problems/${id}/importanza`, { method: 'PATCH', body: JSON.stringify({ importanzaProblema }) }),
 }
