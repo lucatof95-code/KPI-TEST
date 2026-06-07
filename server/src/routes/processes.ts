@@ -76,7 +76,7 @@ router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
   res.json([...processMap.values()])
 })
 
-router.use(requireMaster)
+router.use(authenticate, requireMaster)
 
 const stepInclude = {
   activity: { include: { areas: { include: { competencyArea: true } } } },
