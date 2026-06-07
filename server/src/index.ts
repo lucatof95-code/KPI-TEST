@@ -4,6 +4,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import { prisma } from './lib/prisma'
+import { serveStatic } from './static'
 import authRouter from './routes/auth'
 import competencyAreasRouter from './routes/competencyAreas'
 import sessionsRouter from './routes/sessions'
@@ -75,6 +76,23 @@ app.use('/api/processes', processesRouter)
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
+// In produzione serve il frontend compilato
+if (process.env.NODE_ENV === 'production') {
+  serveStatic(app)
+}
+
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost')
+app.listen(Number(PORT), HOST, () => {
+  console.log(`🚀 Server running on http://${HOST}:${PORT}`)
+  if (HOST === '0.0.0.0') {
+    const { networkInterfaces } = require('os') as typeof import('os')
+    const nets = networkInterfaces()
+    for (const ifaces of Object.values(nets)) {
+      for (const iface of ifaces ?? []) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          console.log(`   → Rete locale: http://${iface.address}:${PORT}`)
+        }
+      }
+    }
+  }
 })

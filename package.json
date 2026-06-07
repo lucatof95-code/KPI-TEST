@@ -8,7 +8,9 @@
     "setup": "npm install && npm run db:push && npm run db:seed",
     "db:push": "npm run db:push --workspace=server",
     "db:seed": "npm run db:seed --workspace=server",
-    "build": "npm run build --workspace=server && npm run build --workspace=client"
+    "build": "npm run build --workspace=client && npm run build --workspace=server",
+    "start": "cd server && NODE_ENV=production node dist/index.js",
+    "start:dev": "npm run dev"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
