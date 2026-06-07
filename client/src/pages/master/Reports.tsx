@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { reportsApi, usersApi, areasApi, sessionsApi } from '../../api'
 import { Report, ProcessReportData } from '../../types'
 import { Select } from '../../components/ui/Select'
@@ -233,8 +233,17 @@ function ProcessiTab() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const LS_KEY = 'kpi_last_seen_reports'
+
 export default function Reports() {
+  const qc = useQueryClient()
   const [tab, setTab] = useState<'attivita' | 'processi'>('attivita')
+
+  // Segna come "visti" i report all'apertura della pagina
+  useEffect(() => {
+    localStorage.setItem(LS_KEY, new Date().toISOString())
+    qc.invalidateQueries({ queryKey: ['master-badges'] })
+  }, [qc])
 
   return (
     <div className="p-6">

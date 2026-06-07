@@ -22,7 +22,7 @@ function NavBadge({ count }: { count: number }) {
 function MasterNav() {
   const { data } = useQuery({
     queryKey: ['master-badges'],
-    queryFn: badgesApi.get,
+    queryFn: () => badgesApi.get(localStorage.getItem('kpi_last_seen_reports') ?? undefined),
     refetchInterval: 60_000,
   })
   const openProblems = data?.openProblems ?? 0

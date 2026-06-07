@@ -6,15 +6,25 @@ import { authenticate, requireMaster, AuthRequest } from '../middleware/auth'
 const router = Router()
 router.use(authenticate, requireMaster)
 
-router.get('/', async (_req: AuthRequest, res: Response) => {
+router.get('/', async (req: AuthRequest, res: Response) => {
   const todayStart = new Date(`${todayUTC()}T00:00:00.000Z`)
 
-  const [openProblems, todayReports] = await Promise.all([
+  // sinceReports: timestamp inviato dal client ("visto l'ultima volta")
+  // Usa il più recente tra todayStart e sinceReports per non mostrare report vecchi
+  let reportsAfter = todayStart
+  if (req.query.sinceReports) {
+    const since = new Date(req.query.sinceReports as string)
+    if (!isNaN(since.getTime()) && since > todayStart) {
+      reportsAfter = since
+    }
+  }
+
+  const [openProblems, newReports] = await Promise.all([
     prisma.report.count({ where: { haProblemi: true, statoRisoluzione: 'APERTO' } }),
-    prisma.report.count({ where: { dataInvio: { gte: todayStart } } }),
+    prisma.report.count({ where: { dataInvio: { gte: reportsAfter } } }),
   ])
 
-  res.json({ openProblems, todayReports })
+  res.json({ openProblems, todayReports: newReports })
 })
 
 export default router

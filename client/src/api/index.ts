@@ -142,7 +142,10 @@ export const processesApi = {
 
 // Badges (master sidebar)
 export const badgesApi = {
-  get: () => apiFetch<{ openProblems: number; todayReports: number }>('/api/badges'),
+  get: (sinceReports?: string) => {
+    const params = sinceReports ? `?sinceReports=${encodeURIComponent(sinceReports)}` : ''
+    return apiFetch<{ openProblems: number; todayReports: number }>(`/api/badges${params}`)
+  },
 }
 
 // Settings
