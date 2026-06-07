@@ -1,3 +1,4 @@
+import { parseId } from '../lib/parseId'
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
@@ -97,7 +98,7 @@ router.get('/', async (_req, res: Response) => {
 })
 
 router.get('/:id', async (req, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   const process = await prisma.process.findUnique({ where: { id }, include: processInclude })
   if (!process) { res.status(404).json({ error: 'Processo non trovato' }); return }
   res.json(process)
@@ -116,7 +117,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 })
 
 router.put('/:id', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   const parsed = processSchema.partial().safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
   try {
@@ -126,7 +127,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 })
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   try {
     await prisma.process.delete({ where: { id } })
     res.status(204).send()
@@ -142,7 +143,7 @@ const stepSchema = z.object({
 })
 
 router.post('/:id/steps', async (req: AuthRequest, res: Response) => {
-  const processId = parseInt(req.params.id)
+  const processId = parseId(req.params.id, res); if (processId === null) return
   const parsed = stepSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
   const { dataScadenza, ...rest } = parsed.data
@@ -154,7 +155,7 @@ router.post('/:id/steps', async (req: AuthRequest, res: Response) => {
 })
 
 router.put('/:id/steps/:stepId', async (req: AuthRequest, res: Response) => {
-  const stepId = parseInt(req.params.stepId)
+  const stepId = parseId(req.params.stepId, res); if (stepId === null) return
   const parsed = stepSchema.partial().safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
   const { dataScadenza, ...rest } = parsed.data
@@ -169,7 +170,7 @@ router.put('/:id/steps/:stepId', async (req: AuthRequest, res: Response) => {
 })
 
 router.delete('/:id/steps/:stepId', async (req: AuthRequest, res: Response) => {
-  const stepId = parseInt(req.params.stepId)
+  const stepId = parseId(req.params.stepId, res); if (stepId === null) return
   try {
     await prisma.processStep.delete({ where: { id: stepId } })
     res.status(204).send()
@@ -179,7 +180,7 @@ router.delete('/:id/steps/:stepId', async (req: AuthRequest, res: Response) => {
 // ── Users per step ───────────────────────────────────────────────────────────
 
 router.post('/:id/steps/:stepId/users', async (req: AuthRequest, res: Response) => {
-  const stepId = parseInt(req.params.stepId)
+  const stepId = parseId(req.params.stepId, res); if (stepId === null) return
   const { userId } = req.body
   if (!userId) { res.status(400).json({ error: 'userId obbligatorio' }); return }
   try {
@@ -192,8 +193,8 @@ router.post('/:id/steps/:stepId/users', async (req: AuthRequest, res: Response) 
 })
 
 router.delete('/:id/steps/:stepId/users/:userId', async (req: AuthRequest, res: Response) => {
-  const stepId = parseInt(req.params.stepId)
-  const userId = parseInt(req.params.userId)
+  const stepId = parseId(req.params.stepId, res); if (stepId === null) return
+  const userId = parseId(req.params.userId, res); if (userId === null) return
   try {
     await prisma.processStepUser.deleteMany({ where: { processStepId: stepId, userId } })
     res.status(204).send()
@@ -203,7 +204,7 @@ router.delete('/:id/steps/:stepId/users/:userId', async (req: AuthRequest, res: 
 // ── Start process ────────────────────────────────────────────────────────────
 
 router.post('/:id/start', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   const process = await prisma.process.findUnique({
     where: { id },
     include: { steps: { include: { users: true }, orderBy: { ordine: 'asc' } } },

@@ -141,10 +141,10 @@ export default function Settings() {
             <div className="relative">
               <input
                 type={showPass ? 'text' : 'password'}
-                value={form.smtp_pass}
-                onChange={f('smtp_pass')}
-                placeholder="••••••••••••"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 pr-10 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={form.smtp_pass === '__SET__' ? '' : form.smtp_pass}
+                onChange={(e) => setForm((prev) => ({ ...prev, smtp_pass: e.target.value }))}
+                placeholder={form.smtp_pass === '__SET__' ? '••••••• (già impostata — lascia vuoto per non modificare)' : '••••••••••••'}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 type="button"
@@ -154,6 +154,9 @@ export default function Settings() {
                 {showPass ? 'Nascondi' : 'Mostra'}
               </button>
             </div>
+            {form.smtp_pass === '__SET__' && (
+              <p className="text-xs text-emerald-500">✓ Password impostata. Lascia il campo vuoto per mantenerla invariata.</p>
+            )}
             <p className="text-xs text-gray-500">Per Gmail usa una App Password (non la password principale)</p>
           </div>
         </div>

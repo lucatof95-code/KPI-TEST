@@ -12,8 +12,9 @@ const KEYS = ['smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass',
 router.get('/', async (_req: AuthRequest, res: Response) => {
   const rows = await prisma.setting.findMany()
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]))
-  // ensure all keys present
   for (const k of KEYS) if (!(k in settings)) settings[k] = ''
+  // Non esporre la password SMTP in chiaro — il client sa solo se è impostata
+  if (settings.smtp_pass) settings.smtp_pass = '__SET__'
   res.json(settings)
 })
 
@@ -32,10 +33,14 @@ router.put('/', async (req: AuthRequest, res: Response) => {
   const parsed = updateSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
   for (const [key, value] of Object.entries(parsed.data)) {
+    // Ignora il valore placeholder — significa "non modificare la password"
+    if (key === 'smtp_pass' && value === '__SET__') continue
     await prisma.setting.upsert({ where: { key }, update: { value: value as string }, create: { key, value: value as string } })
   }
   const rows = await prisma.setting.findMany()
-  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])))
+  const result = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  if (result.smtp_pass) result.smtp_pass = '__SET__'
+  res.json(result)
 })
 
 // Test connection

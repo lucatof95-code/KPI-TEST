@@ -1,6 +1,9 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
+import { prisma } from './lib/prisma'
 import authRouter from './routes/auth'
 import competencyAreasRouter from './routes/competencyAreas'
 import sessionsRouter from './routes/sessions'
@@ -14,12 +17,49 @@ import settingsRouter from './routes/settings'
 import badgesRouter from './routes/badges'
 import processesRouter from './routes/processes'
 
+// ── Startup checks ──────────────────────────────────────────────────────────
+if (!process.env.JWT_SECRET) {
+  console.warn('⚠️  JWT_SECRET non impostato — viene usato un fallback debole. Imposta JWT_SECRET in .env prima di andare in produzione.')
+}
+
 const app = express()
 const PORT = process.env.PORT || 3001
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'], credentials: true }))
-app.use(express.json())
+// ── SQLite WAL mode (migliore resistenza a corruzioni e letture concorrenti) ─
+// journal_mode=WAL restituisce un risultato → $queryRawUnsafe
+// synchronous e busy_timeout non restituiscono risultati → $executeRawUnsafe
+prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {})
+prisma.$executeRawUnsafe('PRAGMA synchronous=NORMAL;').catch(() => {})
+prisma.$executeRawUnsafe('PRAGMA busy_timeout=5000;').catch(() => {})
 
+// ── Security headers ─────────────────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}))
+
+// ── CORS ────────────────────────────────────────────────────────────────────
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true,
+}))
+
+app.use(express.json({ limit: '1mb' }))
+
+// ── Rate limiting su login (max 10 tentativi/15 min per IP) ─────────────────
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Troppi tentativi di accesso. Riprova tra 15 minuti.' },
+  skipSuccessfulRequests: true,
+})
+
+app.use('/auth/login', loginLimiter)
+
+// ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/auth', authRouter)
 app.use('/api/competency-areas', competencyAreasRouter)
 app.use('/api/sessions', sessionsRouter)

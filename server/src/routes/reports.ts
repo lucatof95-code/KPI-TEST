@@ -140,7 +140,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   // Verify assignment belongs to the current user
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
-    include: { session: true },
+    include: { session: true, report: true },
   })
   if (!assignment) { res.status(404).json({ error: 'Assegnazione non trovata' }); return }
   if (assignment.userId !== req.user!.userId) { res.status(403).json({ error: 'Non autorizzato' }); return }

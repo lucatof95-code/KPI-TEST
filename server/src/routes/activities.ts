@@ -1,3 +1,4 @@
+import { parseId } from '../lib/parseId'
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
@@ -36,7 +37,7 @@ router.post('/', requireMaster, async (req: AuthRequest, res: Response) => {
 })
 
 router.put('/:id', requireMaster, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
   const { areaIds, ...rest } = parsed.data
@@ -55,7 +56,7 @@ router.put('/:id', requireMaster, async (req: AuthRequest, res: Response) => {
 })
 
 router.delete('/:id', requireMaster, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   try {
     const assignmentCount = await prisma.assignment.count({ where: { activityId: id } })
     if (assignmentCount > 0) {

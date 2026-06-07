@@ -1,3 +1,4 @@
+import { parseId } from '../lib/parseId'
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
@@ -46,7 +47,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 })
 
 router.put('/:id', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   const parsed = updateSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
   const { password, ...rest } = parsed.data
@@ -63,7 +64,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 })
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   if (req.user?.userId === id) { res.status(400).json({ error: 'Non puoi eliminare te stesso' }); return }
   try {
     await prisma.user.delete({ where: { id } })

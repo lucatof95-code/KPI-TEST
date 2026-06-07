@@ -1,3 +1,4 @@
+import { parseId } from '../lib/parseId'
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
@@ -215,7 +216,7 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
 })
 
 router.delete('/:id', requireMaster, async (req: AuthRequest, res: Response) => {
-  const id = parseInt(req.params.id)
+  const id = parseId(req.params.id, res); if (id === null) return
   try {
     await prisma.assignment.delete({ where: { id } })
     res.status(204).send()
