@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { kpiApi, usersApi, areasApi } from '../../api'
+import { ProcessKpiData } from '../../types'
 import { Select } from '../../components/ui/Select'
 import {
   RadialBarChart, RadialBar, ResponsiveContainer, Tooltip,
@@ -30,6 +31,144 @@ function ApprendimentoCard({ value }: { value: number | null }) {
 }
 
 const AREA_COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
+const PROC_COLORS = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe']
+
+function ProcessKpiSection({ data, invertiComplessita }: { data: ProcessKpiData; invertiComplessita: boolean }) {
+  const procBarData = data.perProcess.map((p, i) => ({
+    nome: p.process.nome.length > 20 ? p.process.nome.slice(0, 18) + '…' : p.process.nome,
+    completamento: p.completamento ?? 0,
+    qualita: p.qualitaMedia ?? 0,
+    color: PROC_COLORS[i % PROC_COLORS.length],
+    stato: p.process.stato,
+  }))
+
+  return (
+    <div className="space-y-4">
+      {/* Divider */}
+      <div className="flex items-center gap-3">
+        <div className="w-6 h-6 bg-indigo-600/20 text-indigo-400 rounded flex items-center justify-center text-sm">🔄</div>
+        <h2 className="text-base font-semibold text-gray-300">KPI Processi</h2>
+        <div className="flex-1 h-px bg-gray-800" />
+      </div>
+
+      {/* Cards */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-2">
+          <p className="text-sm text-gray-400 font-medium">Processi completati</p>
+          <p className="font-mono text-4xl font-bold tabular-nums text-indigo-400">
+            {data.perCompletati !== null ? `${data.perCompletati.toFixed(1)}%` : '—'}
+          </p>
+          <p className="text-xs text-gray-500">{data.completedProcesses} / {data.totalProcesses} · {data.inCorsoProcesses} in corso</p>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-2">
+          <p className="text-sm text-gray-400 font-medium">Step completati</p>
+          <p className="font-mono text-4xl font-bold tabular-nums text-indigo-400">
+            {data.perStepsCompletati !== null ? `${data.perStepsCompletati.toFixed(1)}%` : '—'}
+          </p>
+          <p className="text-xs text-gray-500">{data.completedSteps} / {data.totalSteps} step</p>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-2">
+          <p className="text-sm text-gray-400 font-medium">Qualità media processi</p>
+          <p className="font-mono text-4xl font-bold tabular-nums text-amber-400">
+            {data.qualitaMedia !== null ? `${data.qualitaMedia.toFixed(1)}%` : '—'}
+          </p>
+          <p className="text-xs text-gray-500">Media punteggi dei report negli step{invertiComplessita ? ' (cx invertita)' : ''}</p>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col gap-2">
+          <p className="text-sm text-gray-400 font-medium">Apprendimento medio</p>
+          <p className="font-mono text-4xl font-bold tabular-nums text-violet-400">
+            {data.apprendimentoMedio !== null ? data.apprendimentoMedio.toFixed(1) : '—'}
+            {data.apprendimentoMedio !== null && <span className="text-xl text-gray-500">/100</span>}
+          </p>
+          <p className="text-xs text-gray-500">Su step completati senza nuova formazione</p>
+        </div>
+      </div>
+
+      {/* Table per processo */}
+      {data.perProcess.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-800">
+            <h3 className="text-sm font-medium text-gray-300">Avanzamento per processo</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800">
+                <th className="text-left px-5 py-3 text-gray-400 font-medium">Processo</th>
+                <th className="text-center px-4 py-3 text-gray-400 font-medium">Stato</th>
+                <th className="text-center px-4 py-3 text-gray-400 font-medium">Step completati</th>
+                <th className="text-center px-4 py-3 text-gray-400 font-medium">Completamento</th>
+                <th className="text-center px-4 py-3 text-gray-400 font-medium">Qualità media</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.perProcess.map((p) => (
+                <tr key={p.process.id} className="border-b border-gray-800 last:border-0 hover:bg-gray-800/40">
+                  <td className="px-5 py-3 text-gray-200">{p.process.nome}</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      p.process.stato === 'COMPLETATO' ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-700/50' :
+                      p.process.stato === 'IN_CORSO'   ? 'bg-blue-900/60 text-blue-400 border border-blue-700/50' :
+                      'bg-gray-700 text-gray-400'
+                    }`}>
+                      {p.process.stato === 'COMPLETATO' ? 'Completato' : p.process.stato === 'IN_CORSO' ? 'In corso' : 'Bozza'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center font-mono text-gray-300">{p.completedSteps} / {p.totalSteps}</td>
+                  <td className="px-4 py-3 text-center font-mono">
+                    {p.completamento !== null ? (
+                      <span className={p.completamento >= 80 ? 'text-emerald-400' : p.completamento >= 50 ? 'text-amber-400' : 'text-red-400'}>
+                        {p.completamento.toFixed(1)}%
+                      </span>
+                    ) : <span className="text-gray-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center font-mono">
+                    {p.qualitaMedia !== null ? <span className="text-amber-400">{p.qualitaMedia.toFixed(1)}%</span> : <span className="text-gray-600">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Bar charts */}
+      {procBarData.length > 0 && (
+        <div className="grid xl:grid-cols-2 gap-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-gray-400 mb-4">Completamento step per processo</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={procBarData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                <YAxis type="category" dataKey="nome" tick={{ fill: '#9ca3af', fontSize: 11 }} width={130} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
+                  formatter={(v) => [`${v}%`, 'Completamento']} />
+                <Bar dataKey="completamento" radius={[0, 4, 4, 0]}>
+                  {procBarData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-gray-400 mb-4">Qualità media per processo (%)</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={procBarData} layout="vertical" margin={{ left: 10, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                <YAxis type="category" dataKey="nome" tick={{ fill: '#9ca3af', fontSize: 11 }} width={130} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }}
+                  formatter={(v) => [`${v}%`, 'Qualità']} />
+                <Bar dataKey="qualita" radius={[0, 4, 4, 0]}>
+                  {procBarData.map((e, i) => <Cell key={i} fill={e.color} opacity={0.75} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const [userId, setUserId] = useState('')
@@ -46,6 +185,10 @@ export default function Dashboard() {
   })
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: usersApi.list })
   const { data: areas = [] } = useQuery({ queryKey: ['areas'], queryFn: areasApi.list })
+  const { data: processKpi } = useQuery({
+    queryKey: ['kpi-processes', invertiComplessita],
+    queryFn: () => kpiApi.processes(invertiComplessita),
+  })
 
   const barData = kpi?.perArea
     .filter((a) => a.assegnate > 0)
@@ -205,6 +348,10 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+          )}
+          {/* ── KPI Processi ── */}
+          {processKpi && processKpi.totalProcesses > 0 && (
+            <ProcessKpiSection data={processKpi} invertiComplessita={invertiComplessita} />
           )}
         </>
       )}

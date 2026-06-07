@@ -89,4 +89,85 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   res.json({ perSvolte, perEntroOggi, qualita, apprendimento, perArea })
 })
 
+// ── KPI Processi ──────────────────────────────────────────────────────────────
+
+router.get('/processes', async (req: AuthRequest, res: Response) => {
+  const invertiComplessita = req.query.invertiComplessita === 'true'
+
+  const processes = await prisma.process.findMany({
+    include: {
+      steps: {
+        include: {
+          users: { include: { assignment: { include: { report: true } } } },
+        },
+      },
+    },
+  })
+
+  const totalProcesses = processes.length
+  const completedProcesses = processes.filter((p) => p.stato === 'COMPLETATO').length
+  const inCorsoProcesses  = processes.filter((p) => p.stato === 'IN_CORSO').length
+
+  let totalSteps = 0
+  let completedSteps = 0
+  const allReports: { obiettivo: number; complessita: number; confrontoVecchioERP: number; miglioramentoEfficienza: number; richiedeNuovaFormazione: boolean; giudizioApprendimento: number | null }[] = []
+
+  for (const p of processes) {
+    for (const step of p.steps) {
+      totalSteps++
+      if (step.stato === 'COMPLETATO') completedSteps++
+      for (const psu of step.users) {
+        if (psu.assignment?.report) allReports.push(psu.assignment.report)
+      }
+    }
+  }
+
+  function calcQuality(r: typeof allReports[0]) {
+    const comp = invertiComplessita ? 11 - r.complessita : r.complessita
+    return ((r.obiettivo + comp + r.confrontoVecchioERP + r.miglioramentoEfficienza) / 40) * 100
+  }
+
+  const qualitaMedia = allReports.length > 0
+    ? allReports.reduce((sum, r) => sum + calcQuality(r), 0) / allReports.length
+    : null
+
+  const learningReports = allReports.filter((r) => !r.richiedeNuovaFormazione && r.giudizioApprendimento !== null)
+  const apprendimentoMedio = learningReports.length > 0
+    ? learningReports.reduce((sum, r) => sum + r.giudizioApprendimento!, 0) / learningReports.length
+    : null
+
+  const perProcess = processes.map((p) => {
+    const pReports: typeof allReports = []
+    let pTotalSteps = 0; let pCompletedSteps = 0
+    for (const step of p.steps) {
+      pTotalSteps++
+      if (step.stato === 'COMPLETATO') pCompletedSteps++
+      for (const psu of step.users)
+        if (psu.assignment?.report) pReports.push(psu.assignment.report)
+    }
+    return {
+      process: { id: p.id, nome: p.nome, stato: p.stato },
+      totalSteps: pTotalSteps,
+      completedSteps: pCompletedSteps,
+      completamento: pTotalSteps > 0 ? (pCompletedSteps / pTotalSteps) * 100 : null,
+      qualitaMedia: pReports.length > 0
+        ? pReports.reduce((sum, r) => sum + calcQuality(r), 0) / pReports.length
+        : null,
+    }
+  })
+
+  res.json({
+    totalProcesses,
+    completedProcesses,
+    inCorsoProcesses,
+    perCompletati: totalProcesses > 0 ? (completedProcesses / totalProcesses) * 100 : null,
+    totalSteps,
+    completedSteps,
+    perStepsCompletati: totalSteps > 0 ? (completedSteps / totalSteps) * 100 : null,
+    qualitaMedia,
+    apprendimentoMedio,
+    perProcess,
+  })
+})
+
 export default router

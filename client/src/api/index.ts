@@ -81,6 +81,8 @@ export const assignmentsApi = {
 
 // Reports
 export const reportsApi = {
+  processes: (invertiComplessita = false) =>
+    apiFetch<import('../types').ProcessReportData[]>(`/api/reports/processes${invertiComplessita ? '?invertiComplessita=true' : ''}`),
   list: (filters?: { userId?: number; areaId?: number; sessionId?: number }) => {
     const params = new URLSearchParams()
     if (filters?.userId) params.set('userId', String(filters.userId))
@@ -110,6 +112,8 @@ export const kpiApi = {
     if (filters?.invertiComplessita) params.set('invertiComplessita', 'true')
     return apiFetch<KpiData>(`/api/kpi?${params}`)
   },
+  processes: (invertiComplessita = false) =>
+    apiFetch<import('../types').ProcessKpiData>(`/api/kpi/processes${invertiComplessita ? '?invertiComplessita=true' : ''}`),
 }
 
 // Processes

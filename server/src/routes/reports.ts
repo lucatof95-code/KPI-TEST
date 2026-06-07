@@ -12,6 +12,89 @@ const reportInclude = {
   assignment: { include: { session: true } },
 }
 
+// Master: reports grouped by process
+router.get('/processes', requireMaster, async (req: AuthRequest, res: Response) => {
+  const invertiComplessita = req.query.invertiComplessita === 'true'
+
+  const processes = await prisma.process.findMany({
+    include: {
+      steps: {
+        orderBy: { ordine: 'asc' },
+        include: {
+          activity: { include: { areas: { include: { competencyArea: true } } } },
+          users: {
+            include: {
+              user: { select: { id: true, nome: true, cognome: true } },
+              assignment: {
+                include: {
+                  report: { include: { user: { select: { id: true, nome: true, cognome: true } } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  function calcQ(r: { obiettivo: number; complessita: number; confrontoVecchioERP: number; miglioramentoEfficienza: number }) {
+    const comp = invertiComplessita ? 11 - r.complessita : r.complessita
+    return ((r.obiettivo + comp + r.confrontoVecchioERP + r.miglioramentoEfficienza) / 40) * 100
+  }
+
+  const result = processes.map((p) => {
+    let totalQ = 0; let reportCount = 0
+
+    const steps = p.steps.map((step) => {
+      const stepReports = step.users
+        .filter((psu) => psu.assignment?.report)
+        .map((psu) => {
+          const r = psu.assignment!.report!
+          const quality = calcQ(r)
+          totalQ += quality; reportCount++
+          return {
+            id: r.id,
+            user: psu.user,
+            obiettivo: r.obiettivo,
+            complessita: r.complessita,
+            confrontoVecchioERP: r.confrontoVecchioERP,
+            miglioramentoEfficienza: r.miglioramentoEfficienza,
+            haProblemi: r.haProblemi,
+            richiedeNuovaFormazione: r.richiedeNuovaFormazione,
+            giudizioApprendimento: r.giudizioApprendimento,
+            statoRisoluzione: r.statoRisoluzione,
+            dataInvio: r.dataInvio,
+            quality: parseFloat(quality.toFixed(1)),
+          }
+        })
+
+      const stepQ = stepReports.length > 0
+        ? stepReports.reduce((s, r) => s + r.quality, 0) / stepReports.length
+        : null
+
+      return {
+        step: { id: step.id, ordine: step.ordine, stato: step.stato, activity: step.activity },
+        reports: stepReports,
+        qualitaMedia: stepQ !== null ? parseFloat(stepQ.toFixed(1)) : null,
+      }
+    })
+
+    return {
+      process: { id: p.id, nome: p.nome, stato: p.stato, descrizione: p.descrizione },
+      steps,
+      qualitaMediaProcesso: reportCount > 0 ? parseFloat((totalQ / reportCount).toFixed(1)) : null,
+      completamento: p.steps.length > 0
+        ? parseFloat(((p.steps.filter((s) => s.stato === 'COMPLETATO').length / p.steps.length) * 100).toFixed(1))
+        : null,
+      totalSteps: p.steps.length,
+      completedSteps: p.steps.filter((s) => s.stato === 'COMPLETATO').length,
+    }
+  })
+
+  res.json(result)
+})
+
 // Master: all reports with filters
 router.get('/', requireMaster, async (req: AuthRequest, res: Response) => {
   const { userId, areaId, sessionId } = req.query

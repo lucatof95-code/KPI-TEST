@@ -141,6 +141,53 @@ export interface CalendarEventInput {
   location?: string
 }
 
+export interface ProcessKpiData {
+  totalProcesses: number
+  completedProcesses: number
+  inCorsoProcesses: number
+  perCompletati: number | null
+  totalSteps: number
+  completedSteps: number
+  perStepsCompletati: number | null
+  qualitaMedia: number | null
+  apprendimentoMedio: number | null
+  perProcess: {
+    process: { id: number; nome: string; stato: string }
+    totalSteps: number
+    completedSteps: number
+    completamento: number | null
+    qualitaMedia: number | null
+  }[]
+}
+
+export interface ProcessReportEntry {
+  step: { id: number; ordine: number; stato: string; activity: Activity }
+  reports: {
+    id: number
+    user: Pick<User, 'id' | 'nome' | 'cognome'>
+    obiettivo: number
+    complessita: number
+    confrontoVecchioERP: number
+    miglioramentoEfficienza: number
+    haProblemi: boolean
+    richiedeNuovaFormazione: boolean
+    giudizioApprendimento: number | null
+    statoRisoluzione: StatoRisoluzione
+    dataInvio: string
+    quality: number
+  }[]
+  qualitaMedia: number | null
+}
+
+export interface ProcessReportData {
+  process: { id: number; nome: string; stato: string; descrizione: string }
+  steps: ProcessReportEntry[]
+  qualitaMediaProcesso: number | null
+  completamento: number | null
+  totalSteps: number
+  completedSteps: number
+}
+
 export interface UserProcessStep {
   stepId: number
   ordine: number
