@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
-import { assignmentsApi } from '../../api'
+import { assignmentsApi, badgesApi } from '../../api'
 
 interface NavItem {
   to: string
@@ -10,17 +10,58 @@ interface NavItem {
   badge?: number
 }
 
-const masterNav: NavItem[] = [
-  { to: '/master/dashboard', label: 'Dashboard KPI', icon: '📊' },
-  { to: '/master/assignments', label: 'Assegnazioni', icon: '📋' },
-  { to: '/master/problems', label: 'Problematiche', icon: '🔴' },
-  { to: '/master/reports', label: 'Report', icon: '📄' },
-  { to: '/master/areas', label: 'Aree competenza', icon: '🏷️' },
-  { to: '/master/sessions', label: 'Sessioni', icon: '📅' },
-  { to: '/master/activities', label: 'Attività', icon: '✏️' },
-  { to: '/master/users', label: 'Utenti', icon: '👥' },
-  { to: '/master/settings', label: 'Impostazioni', icon: '⚙️' },
-]
+function NavBadge({ count }: { count: number }) {
+  if (count === 0) return null
+  return (
+    <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
+function MasterNav() {
+  const { data } = useQuery({
+    queryKey: ['master-badges'],
+    queryFn: badgesApi.get,
+    refetchInterval: 60_000,
+  })
+  const openProblems = data?.openProblems ?? 0
+  const todayReports = data?.todayReports ?? 0
+
+  const nav: NavItem[] = [
+    { to: '/master/dashboard', label: 'Dashboard KPI', icon: '📊' },
+    { to: '/master/assignments', label: 'Assegnazioni', icon: '📋' },
+    { to: '/master/problems', label: 'Problematiche', icon: '🔴', badge: openProblems },
+    { to: '/master/reports', label: 'Report', icon: '📄', badge: todayReports },
+    { to: '/master/areas', label: 'Aree competenza', icon: '🏷️' },
+    { to: '/master/sessions', label: 'Sessioni', icon: '📅' },
+    { to: '/master/activities', label: 'Attività', icon: '✏️' },
+    { to: '/master/users', label: 'Utenti', icon: '👥' },
+    { to: '/master/settings', label: 'Impostazioni', icon: '⚙️' },
+  ]
+
+  return (
+    <>
+      {nav.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              isActive
+                ? 'bg-blue-600/20 text-blue-400 font-medium'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+            }`
+          }
+        >
+          <span>{item.icon}</span>
+          <span className="flex-1">{item.label}</span>
+          {item.badge !== undefined && <NavBadge count={item.badge} />}
+        </NavLink>
+      ))}
+    </>
+  )
+}
 
 function UserNav() {
   const { data } = useQuery({
@@ -80,24 +121,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5">
-        {isMaster
-          ? masterNav.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    isActive
-                      ? 'bg-blue-600/20 text-blue-400 font-medium'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
-                  }`
-                }
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </NavLink>
-            ))
-          : <UserNav />}
+        {isMaster ? <MasterNav /> : <UserNav />}
       </nav>
 
       {/* User */}

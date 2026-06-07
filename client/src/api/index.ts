@@ -110,6 +110,11 @@ export const kpiApi = {
   },
 }
 
+// Badges (master sidebar)
+export const badgesApi = {
+  get: () => apiFetch<{ openProblems: number; todayReports: number }>('/api/badges'),
+}
+
 // Settings
 export const settingsApi = {
   get: () => apiFetch<AppSettings>('/api/settings'),
