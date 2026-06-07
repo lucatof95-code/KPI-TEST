@@ -29,7 +29,7 @@ export default function Assignments() {
     endTime: '10:00',
     location: '',
   })
-  const [form, setForm] = useState({ activityId: '', userId: '', sessionId: '', dataScadenza: today })
+  const [form, setForm] = useState({ activityId: '', selectedUserIds: [] as number[], sessionId: '', dataScadenza: today })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [deleteId, setDeleteId] = useState<number | null>(null)
 
@@ -83,24 +83,32 @@ export default function Assignments() {
   const validate = () => {
     const e: Record<string, string> = {}
     if (!form.activityId) e.activityId = 'Seleziona attività'
-    if (!form.userId) e.userId = 'Seleziona utente'
-    if (!form.sessionId) e.sessionId = 'Seleziona sessione'
+    if (form.selectedUserIds.length === 0) e.userIds = 'Seleziona almeno un utente'
     if (!form.dataScadenza) e.dataScadenza = 'Data obbligatoria'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
+  const toggleUser = (uid: number) => {
+    setForm((f) => ({
+      ...f,
+      selectedUserIds: f.selectedUserIds.includes(uid)
+        ? f.selectedUserIds.filter((id) => id !== uid)
+        : [...f.selectedUserIds, uid],
+    }))
+  }
+
   const create = useMutation({
-    mutationFn: () => assignmentsApi.create({
+    mutationFn: () => assignmentsApi.bulk({
       activityId: Number(form.activityId),
-      userId: Number(form.userId),
-      sessionId: Number(form.sessionId),
+      userIds: form.selectedUserIds,
+      sessionId: form.sessionId ? Number(form.sessionId) : null,
       dataScadenza: form.dataScadenza,
     }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['assignments'] })
       setModalOpen(false)
-      addToast('Assegnazione creata')
+      addToast(`${res.created} assegnazion${res.created === 1 ? 'e creata' : 'i create'}${res.skipped > 0 ? ` (${res.skipped} già esistenti)` : ''}`)
     },
     onError: (e: Error) => addToast(e.message, 'error'),
   })
@@ -152,7 +160,7 @@ export default function Assignments() {
             </Button>
           )}
           <Button onClick={() => {
-            setForm({ activityId: '', userId: '', sessionId: '', dataScadenza: today })
+            setForm({ activityId: '', selectedUserIds: [], sessionId: '', dataScadenza: today })
             setErrors({})
             setModalOpen(true)
           }}>
@@ -234,7 +242,7 @@ export default function Assignments() {
                         <span className="text-gray-200">{a.activity.nome}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{a.session.nome}</td>
+                    <td className="px-4 py-3 text-gray-400">{a.session?.nome ?? <span className="text-gray-600 italic text-xs">—</span>}</td>
                     <td className="px-4 py-3">
                       <span className={late ? 'text-red-400 font-medium' : 'text-gray-400'}>
                         {new Date(a.dataScadenza).toLocaleDateString('it-IT')}
@@ -357,26 +365,49 @@ export default function Assignments() {
       </Modal>
 
       {/* New assignment modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nuova assegnazione">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nuova assegnazione" size="md">
         <div className="flex flex-col gap-4">
-          <Select label="Utente" value={form.userId}
-            onChange={(e) => setForm((f) => ({ ...f, userId: e.target.value }))}
-            options={users.map((u) => ({ value: u.id, label: `${u.cognome} ${u.nome}` }))}
-            placeholder="Seleziona utente" error={errors.userId} />
           <Select label="Attività" value={form.activityId}
             onChange={(e) => setForm((f) => ({ ...f, activityId: e.target.value }))}
             options={activities.map((a) => ({ value: a.id, label: a.nome }))}
             placeholder="Seleziona attività" error={errors.activityId} />
-          <Select label="Sessione" value={form.sessionId}
+
+          {/* Multi-user select */}
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-300">
+              Utenti <span className="text-gray-500 font-normal">(seleziona uno o più)</span>
+            </label>
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 max-h-40 overflow-y-auto flex flex-col gap-1">
+              {users.filter(u => u.ruolo === 'USER').map((u) => (
+                <label key={u.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.selectedUserIds.includes(u.id)}
+                    onChange={() => toggleUser(u.id)}
+                    className="accent-blue-500 w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-200">{u.cognome} {u.nome}</span>
+                </label>
+              ))}
+            </div>
+            {form.selectedUserIds.length > 0 && (
+              <p className="text-xs text-blue-400">{form.selectedUserIds.length} utent{form.selectedUserIds.length === 1 ? 'e' : 'i'} selezionat{form.selectedUserIds.length === 1 ? 'o' : 'i'}</p>
+            )}
+            {errors.userIds && <p className="text-xs text-red-400">{errors.userIds}</p>}
+          </div>
+
+          <Select label="Sessione (opzionale)" value={form.sessionId}
             onChange={(e) => setForm((f) => ({ ...f, sessionId: e.target.value }))}
             options={sessions.map((s) => ({ value: s.id, label: s.nome }))}
-            placeholder="Seleziona sessione" error={errors.sessionId} />
+            placeholder="Nessuna sessione" />
           <Input label="Data scadenza" type="date" value={form.dataScadenza}
             onChange={(e) => setForm((f) => ({ ...f, dataScadenza: e.target.value }))}
             error={errors.dataScadenza} />
           <div className="flex gap-2 justify-end mt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Annulla</Button>
-            <Button isLoading={create.isPending} onClick={() => { if (validate()) create.mutate() }}>Crea</Button>
+            <Button isLoading={create.isPending} onClick={() => { if (validate()) create.mutate() }}>
+              Crea {form.selectedUserIds.length > 1 ? `(${form.selectedUserIds.length} utenti)` : ''}
+            </Button>
           </div>
         </div>
       </Modal>

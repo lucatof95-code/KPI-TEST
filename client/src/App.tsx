@@ -13,6 +13,8 @@ import Problems from './pages/master/Problems'
 import Reports from './pages/master/Reports'
 import MyActivities from './pages/user/MyActivities'
 import Settings from './pages/master/Settings'
+import Processes from './pages/master/Processes'
+import ProcessDetail from './pages/master/ProcessDetail'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -68,6 +70,8 @@ export default function App() {
                     <Route path="problems" element={<Problems />} />
                     <Route path="reports" element={<Reports />} />
                     <Route path="settings" element={<Settings />} />
+                    <Route path="processes" element={<Processes />} />
+                    <Route path="processes/:id" element={<ProcessDetail />} />
                   </Routes>
                 </RequireMaster>
               }

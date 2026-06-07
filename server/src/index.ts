@@ -12,6 +12,7 @@ import kpiRouter from './routes/kpi'
 import problemsRouter from './routes/problems'
 import settingsRouter from './routes/settings'
 import badgesRouter from './routes/badges'
+import processesRouter from './routes/processes'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -30,6 +31,7 @@ app.use('/api/kpi', kpiRouter)
 app.use('/api/problems', problemsRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/badges', badgesRouter)
+app.use('/api/processes', processesRouter)
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 

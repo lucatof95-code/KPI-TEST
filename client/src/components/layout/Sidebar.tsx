@@ -31,6 +31,7 @@ function MasterNav() {
   const nav: NavItem[] = [
     { to: '/master/dashboard', label: 'Dashboard KPI', icon: '📊' },
     { to: '/master/assignments', label: 'Assegnazioni', icon: '📋' },
+    { to: '/master/processes', label: 'Processi', icon: '🔄' },
     { to: '/master/problems', label: 'Problematiche', icon: '🔴', badge: openProblems },
     { to: '/master/reports', label: 'Report', icon: '📄', badge: todayReports },
     { to: '/master/areas', label: 'Aree competenza', icon: '🏷️' },

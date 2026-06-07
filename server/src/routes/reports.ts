@@ -63,38 +63,93 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   if (assignment.userId !== req.user!.userId) { res.status(403).json({ error: 'Non autorizzato' }); return }
   if (assignment.report) { res.status(409).json({ error: 'Report già inviato per questa attività' }); return }
 
-  // Check session is not locked
-  const userAssignments = await prisma.assignment.findMany({
-    where: { userId: req.user!.userId },
-    include: { session: true },
-  })
-  const sessionIds = [...new Set(userAssignments.map((a) => a.sessionId))]
-  const sessions = await prisma.session.findMany({
-    where: { id: { in: sessionIds } },
-    orderBy: { ordine: 'asc' },
-  })
-  const prevSessions = sessions.filter((s) => s.ordine < assignment.session.ordine)
-  if (prevSessions.length > 0) {
-    const prevAssignments = userAssignments.filter((a) => prevSessions.some((s) => s.id === a.sessionId))
-    if (!prevAssignments.every((a) => a.stato === 'SVOLTA')) {
-      res.status(403).json({ error: 'Devi completare le sessioni precedenti prima di questa' })
-      return
+  // Check session-based lock (only for assignments with a session)
+  if (assignment.sessionId) {
+    const userAssignments = await prisma.assignment.findMany({
+      where: { userId: req.user!.userId, sessionId: { not: null } },
+      include: { session: true },
+    })
+    const sessionIds = [...new Set(userAssignments.map((a) => a.sessionId!))]
+    const sessions = await prisma.session.findMany({
+      where: { id: { in: sessionIds } },
+      orderBy: { ordine: 'asc' },
+    })
+    const currentOrdine = assignment.session!.ordine
+    const prevSessions = sessions.filter((s) => s.ordine < currentOrdine)
+    if (prevSessions.length > 0) {
+      const prevAssignments = userAssignments.filter((a) => prevSessions.some((s) => s.id === a.sessionId))
+      if (!prevAssignments.every((a) => a.stato === 'SVOLTA')) {
+        res.status(403).json({ error: 'Devi completare le sessioni precedenti prima di questa' })
+        return
+      }
     }
   }
 
   const report = await prisma.report.create({
-    data: {
-      ...reportData,
-      assignmentId,
-      userId: req.user!.userId,
-      activityId: assignment.activityId,
-    },
+    data: { ...reportData, assignmentId, userId: req.user!.userId, activityId: assignment.activityId },
     include: reportInclude,
   })
 
   await prisma.assignment.update({ where: { id: assignmentId }, data: { stato: 'SVOLTA' } })
 
+  // Auto-advance process if this assignment belongs to a process step
+  await advanceProcess(assignmentId)
+
   res.status(201).json(report)
 })
+
+async function advanceProcess(assignmentId: number) {
+  const psu = await prisma.processStepUser.findUnique({
+    where: { assignmentId },
+    include: {
+      processStep: {
+        include: {
+          users: { include: { assignment: true } },
+          process: { include: { steps: { orderBy: { ordine: 'asc' } } } },
+        },
+      },
+    },
+  })
+  if (!psu) return
+
+  const step = psu.processStep
+  const allDone = step.users.every((u) => u.assignment?.stato === 'SVOLTA')
+  if (!allDone) return
+
+  // Mark current step as COMPLETATO
+  await prisma.processStep.update({ where: { id: step.id }, data: { stato: 'COMPLETATO' } })
+
+  // Find next step
+  const nextStep = step.process.steps.find((s) => s.ordine > step.ordine)
+  if (!nextStep) {
+    // All steps done — complete the process
+    await prisma.process.update({ where: { id: step.processId }, data: { stato: 'COMPLETATO' } })
+    return
+  }
+
+  // Load next step users and create assignments
+  const nextStepFull = await prisma.processStep.findUnique({
+    where: { id: nextStep.id },
+    include: { users: true },
+  })
+  if (!nextStepFull || nextStepFull.users.length === 0) return
+
+  for (const nextPsu of nextStepFull.users) {
+    const newAssignment = await prisma.assignment.create({
+      data: {
+        activityId: nextStep.activityId,
+        userId: nextPsu.userId,
+        dataScadenza: nextStep.dataScadenza || new Date(Date.now() + 7 * 86400000),
+        stato: 'DA_SVOLGERE',
+      },
+    })
+    await prisma.processStepUser.update({
+      where: { id: nextPsu.id },
+      data: { assignmentId: newAssignment.id },
+    })
+  }
+
+  await prisma.processStep.update({ where: { id: nextStep.id }, data: { stato: 'IN_CORSO' } })
+}
 
 export default router

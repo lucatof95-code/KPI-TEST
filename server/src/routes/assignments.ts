@@ -13,9 +13,9 @@ const include = {
   user: { select: { id: true, nome: true, cognome: true, email: true } },
   session: true,
   report: true,
+  processStepUser: { include: { processStep: { include: { process: true } } } },
 }
 
-/** Adds server-computed isLate to each assignment. Single source of truth for "today". */
 function withIsLate<T extends { stato: string; dataScadenza: Date }>(assignments: T[]) {
   const today = todayUTC()
   return assignments.map((a) => ({
@@ -56,10 +56,12 @@ router.get('/my', async (req: AuthRequest, res: Response) => {
   const assignments = await prisma.assignment.findMany({
     where: { userId },
     include,
-    orderBy: [{ session: { ordine: 'asc' } }, { dataScadenza: 'asc' }],
+    orderBy: [{ dataScadenza: 'asc' }],
   })
 
-  const sessionIds = [...new Set(assignments.map((a) => a.sessionId))]
+  // Session-based locking only applies to assignments WITH a session
+  const withSession = assignments.filter((a) => a.sessionId !== null)
+  const sessionIds = [...new Set(withSession.map((a) => a.sessionId!))]
   const sessions = await prisma.session.findMany({
     where: { id: { in: sessionIds } },
     orderBy: { ordine: 'asc' },
@@ -71,7 +73,7 @@ router.get('/my', async (req: AuthRequest, res: Response) => {
     if (prevSessions.length === 0) {
       sessionLocked[sess.id] = false
     } else {
-      const prevAssignments = assignments.filter((a) => prevSessions.some((s) => s.id === a.sessionId))
+      const prevAssignments = withSession.filter((a) => prevSessions.some((s) => s.id === a.sessionId))
       sessionLocked[sess.id] = !prevAssignments.every((a) => a.stato === 'SVOLTA')
     }
   }
@@ -79,10 +81,11 @@ router.get('/my', async (req: AuthRequest, res: Response) => {
   res.json({ assignments: withIsLate(assignments), sessionLocked, sessions })
 })
 
+// Master: create single assignment
 const createSchema = z.object({
   activityId: z.number().int(),
   userId: z.number().int(),
-  sessionId: z.number().int(),
+  sessionId: z.number().int().optional().nullable(),
   dataScadenza: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
 })
 
@@ -105,7 +108,37 @@ router.post('/', requireMaster, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Master: send notification emails for selected assignments (one email per user)
+// Master: create assignments for multiple users at once
+const bulkSchema = z.object({
+  activityId: z.number().int(),
+  userIds: z.array(z.number().int()).min(1),
+  sessionId: z.number().int().optional().nullable(),
+  dataScadenza: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
+})
+
+router.post('/bulk', requireMaster, async (req: AuthRequest, res: Response) => {
+  const parsed = bulkSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
+  const { userIds, activityId, sessionId, dataScadenza } = parsed.data
+
+  const results: { userId: number; ok: boolean; error?: string }[] = []
+  for (const userId of userIds) {
+    try {
+      await prisma.assignment.create({
+        data: { activityId, userId, sessionId: sessionId ?? null, dataScadenza: new Date(dataScadenza) },
+      })
+      results.push({ userId, ok: true })
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : ''
+      results.push({ userId, ok: false, error: msg.includes('Unique') ? 'già assegnata' : 'errore' })
+    }
+  }
+
+  const created = results.filter((r) => r.ok).length
+  res.status(201).json({ created, skipped: results.filter((r) => !r.ok).length, results })
+})
+
+// Master: notify selected assignments
 const calendarEventSchema = z.object({
   title: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -115,7 +148,7 @@ const calendarEventSchema = z.object({
 }).optional()
 
 const notifySchema = z.object({
-  assignmentIds: z.array(z.number().int()).min(1, 'Seleziona almeno un\'assegnazione'),
+  assignmentIds: z.array(z.number().int()).min(1),
   calendarEvent: calendarEventSchema,
 })
 
@@ -124,20 +157,14 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return }
 
   const { assignmentIds, calendarEvent } = parsed.data
-
   const assignments = await prisma.assignment.findMany({
     where: { id: { in: assignmentIds } },
     include: { user: true, activity: true, session: true },
   })
-
-  if (assignments.length === 0) {
-    res.status(404).json({ error: 'Assegnazioni non trovate' })
-    return
-  }
+  if (assignments.length === 0) { res.status(404).json({ error: 'Assegnazioni non trovate' }); return }
 
   const cfg = await loadSettings()
 
-  // Group by user
   const byUser = new Map<number, typeof assignments>()
   for (const a of assignments) {
     const group = byUser.get(a.userId) || []
@@ -145,27 +172,23 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
     byUser.set(a.userId, group)
   }
 
-  // Build ICS once (same event for all recipients)
   let icsContent: string | undefined
   if (calendarEvent) {
     const [sy, sm, sd] = calendarEvent.date.split('-').map(Number)
     const [sh, smin] = calendarEvent.startTime.split(':').map(Number)
     const [eh, emin] = calendarEvent.endTime.split(':').map(Number)
-    const start = new Date(Date.UTC(sy, sm - 1, sd, sh, smin))
-    const end = new Date(Date.UTC(sy, sm - 1, sd, eh, emin))
     icsContent = generateICS({
       title: calendarEvent.title,
-      description: `Sessione di formazione ERP — ${calendarEvent.title}`,
+      description: `Sessione formazione ERP — ${calendarEvent.title}`,
       location: calendarEvent.location,
-      start,
-      end,
+      start: new Date(Date.UTC(sy, sm - 1, sd, sh, smin)),
+      end: new Date(Date.UTC(sy, sm - 1, sd, eh, emin)),
       organizerName: cfg.fromName,
       organizerEmail: cfg.fromEmail || cfg.user,
     })
   }
 
   const results: { userId: number; email: string; ok: boolean; error?: string }[] = []
-
   for (const [, userAssignments] of byUser) {
     const user = userAssignments[0].user
     const counts = {
@@ -173,7 +196,6 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
       test: userAssignments.filter((a) => a.activity.tipo === 'TEST').length,
     }
     const emailData = buildNotificationEmail(user.nome, user.cognome, counts, cfg.appUrl, cfg.fromName)
-
     try {
       await sendMail({ to: user.email, ...emailData, icsAttachment: icsContent })
       results.push({ userId: user.id, email: user.email, ok: true })
@@ -184,7 +206,6 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
 
   const sent = results.filter((r) => r.ok).length
   const failed = results.filter((r) => !r.ok).length
-
   res.json({
     sent, failed, total: results.length, results,
     message: failed === 0

@@ -35,19 +35,49 @@ export interface Activity {
   createdAt: string
 }
 
+export interface ProcessStepUser {
+  id: number
+  processStepId: number
+  userId: number
+  assignmentId: number | null
+  user: Pick<User, 'id' | 'nome' | 'cognome'>
+  assignment: Assignment | null
+}
+
+export interface ProcessStep {
+  id: number
+  processId: number
+  activityId: number
+  ordine: number
+  stato: 'BLOCCATO' | 'IN_CORSO' | 'COMPLETATO'
+  dataScadenza: string | null
+  activity: Activity
+  users: ProcessStepUser[]
+}
+
+export interface Process {
+  id: number
+  nome: string
+  descrizione: string
+  stato: 'BOZZA' | 'IN_CORSO' | 'COMPLETATO'
+  steps: ProcessStep[]
+  createdAt: string
+}
+
 export interface Assignment {
   id: number
   activityId: number
   userId: number
-  sessionId: number
+  sessionId: number | null
   dataScadenza: string
   stato: AssignmentStatus
   /** Computed server-side: DA_SVOLGERE and due date < today (UTC). */
   isLate: boolean
   activity: Activity
   user: Pick<User, 'id' | 'nome' | 'cognome' | 'email'>
-  session: Session
+  session: Session | null
   report: Report | null
+  processStepUser: { processStep: { process: Pick<Process, 'id' | 'nome'> } } | null
   createdAt: string
 }
 

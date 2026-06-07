@@ -2,7 +2,7 @@ import { apiFetch } from './client'
 import type {
   User, CompetencyArea, Session, Activity,
   Assignment, Report, KpiData, ProblemGroup, MyAssignmentsResponse,
-  AppSettings, CalendarEventInput,
+  AppSettings, CalendarEventInput, Process, ProcessStep,
 } from '../types'
 
 // Auth
@@ -70,6 +70,8 @@ export const assignmentsApi = {
   delete: (id: number) => apiFetch<void>(`/api/assignments/${id}`, { method: 'DELETE' }),
   myAssignments: () => apiFetch<MyAssignmentsResponse>('/api/assignments/my'),
   myPendingCount: () => apiFetch<{ pending: number }>('/api/assignments/my/count'),
+  bulk: (data: { activityId: number; userIds: number[]; sessionId?: number | null; dataScadenza: string }) =>
+    apiFetch<{ created: number; skipped: number }>('/api/assignments/bulk', { method: 'POST', body: JSON.stringify(data) }),
   notify: (assignmentIds: number[], calendarEvent?: CalendarEventInput) =>
     apiFetch<{ sent: number; failed: number; total: number; message: string }>(
       '/api/assignments/notify',
@@ -108,6 +110,29 @@ export const kpiApi = {
     if (filters?.invertiComplessita) params.set('invertiComplessita', 'true')
     return apiFetch<KpiData>(`/api/kpi?${params}`)
   },
+}
+
+// Processes
+export const processesApi = {
+  list: () => apiFetch<Process[]>('/api/processes'),
+  get: (id: number) => apiFetch<Process>(`/api/processes/${id}`),
+  create: (data: { nome: string; descrizione: string }) =>
+    apiFetch<Process>('/api/processes', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: { nome?: string; descrizione?: string }) =>
+    apiFetch<Process>(`/api/processes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: number) => apiFetch<void>(`/api/processes/${id}`, { method: 'DELETE' }),
+  start: (id: number) =>
+    apiFetch<Process>(`/api/processes/${id}/start`, { method: 'POST' }),
+  addStep: (processId: number, data: { activityId: number; ordine: number; dataScadenza?: string | null }) =>
+    apiFetch<ProcessStep>(`/api/processes/${processId}/steps`, { method: 'POST', body: JSON.stringify(data) }),
+  updateStep: (processId: number, stepId: number, data: { activityId?: number; ordine?: number; dataScadenza?: string | null }) =>
+    apiFetch<ProcessStep>(`/api/processes/${processId}/steps/${stepId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteStep: (processId: number, stepId: number) =>
+    apiFetch<void>(`/api/processes/${processId}/steps/${stepId}`, { method: 'DELETE' }),
+  addUserToStep: (processId: number, stepId: number, userId: number) =>
+    apiFetch(`/api/processes/${processId}/steps/${stepId}/users`, { method: 'POST', body: JSON.stringify({ userId }) }),
+  removeUserFromStep: (processId: number, stepId: number, userId: number) =>
+    apiFetch<void>(`/api/processes/${processId}/steps/${stepId}/users/${userId}`, { method: 'DELETE' }),
 }
 
 // Badges (master sidebar)

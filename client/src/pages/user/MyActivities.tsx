@@ -72,6 +72,11 @@ export default function MyActivities() {
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <StatusBadge stato={a.activity.tipo} />
                     <span className={`font-medium ${locked ? 'text-gray-500' : 'text-gray-100'}`}>{a.activity.nome}</span>
+                    {a.processStepUser && (
+                      <span className="text-xs bg-indigo-900/50 text-indigo-400 border border-indigo-700/40 px-2 py-0.5 rounded-full">
+                        🔄 {a.processStepUser.processStep.process.nome}
+                      </span>
+                    )}
                     {a.stato === 'SVOLTA' && <span className="text-emerald-400 text-xs">✓ Completata</span>}
                   </div>
                   <p className={`text-sm ${locked ? 'text-gray-600' : 'text-gray-500'} line-clamp-2`}>{a.activity.descrizione}</p>
