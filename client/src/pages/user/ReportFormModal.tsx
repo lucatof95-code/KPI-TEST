@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { reportsApi } from '../../api'
 import { Assignment } from '../../types'
 import { Modal } from '../../components/ui/Modal'
@@ -60,6 +60,7 @@ function FormazioneForm({
   assignment, onClose, onSuccess,
 }: Props) {
   const { addToast } = useGlobalToast()
+  const qc = useQueryClient()
   const [form, setForm] = useState<FormazioneState>({
     obiettivo: 5, complessita: 5, confrontoVecchioERP: 5, miglioramentoEfficienza: 5,
     haProblemi: false, descrizioneProblema: '',
@@ -85,7 +86,12 @@ function FormazioneForm({
       richiedeNuovaFormazione: form.richiedeNuovaFormazione,
       giudizioApprendimento: form.richiedeNuovaFormazione ? null : form.giudizioApprendimento,
     }),
-    onSuccess: () => { addToast('Report inviato! Attività completata.'); onSuccess() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-pending-count'] })
+      qc.invalidateQueries({ queryKey: ['my-assignments'] })
+      addToast('Report inviato! Attività completata.')
+      onSuccess()
+    },
     onError: (e: Error) => addToast(e.message, 'error'),
   })
 
@@ -149,6 +155,7 @@ function FormazioneForm({
 // ── TEST form ─────────────────────────────────────────────────────────────
 function TestForm({ assignment, onClose, onSuccess }: Props) {
   const { addToast } = useGlobalToast()
+  const qc = useQueryClient()
   const [form, setForm] = useState<TestState>({
     obiettivo: 5, complessita: 5, confrontoVecchioERP: 5, miglioramentoEfficienza: 5,
     haProblemi: false, descrizioneProblema: '',
@@ -181,7 +188,12 @@ function TestForm({ assignment, onClose, onSuccess }: Props) {
       richiedeNuovaFormazione: !form.superato,
       giudizioApprendimento: form.superato ? form.punteggio : null,
     }),
-    onSuccess: () => { addToast('Report inviato! Test completato.'); onSuccess() },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-pending-count'] })
+      qc.invalidateQueries({ queryKey: ['my-assignments'] })
+      addToast('Report inviato! Test completato.')
+      onSuccess()
+    },
     onError: (e: Error) => addToast(e.message, 'error'),
   })
 
