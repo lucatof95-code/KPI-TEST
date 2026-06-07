@@ -105,7 +105,17 @@ export default function ProcessDetail() {
   }
 
   const isBozza = process.stato === 'BOZZA'
-  const canStart = isBozza && process.steps.length > 0 && process.steps[0]?.users.length > 0
+  const hasSteps = process.steps.length > 0
+  const firstStepHasUsers = (process.steps[0]?.users.length ?? 0) > 0
+  const canStart = isBozza && hasSteps && firstStepHasUsers
+
+  const startBlockReason = !isBozza
+    ? null // già avviato, non mostrare il bottone
+    : !hasSteps
+    ? 'Aggiungi almeno uno step per avviare'
+    : !firstStepHasUsers
+    ? 'Il primo step deve avere almeno un utente assegnato'
+    : null
 
   return (
     <div className="p-6 max-w-3xl">
@@ -123,10 +133,20 @@ export default function ProcessDetail() {
             {process.stato === 'BOZZA' ? 'Bozza' : process.stato === 'IN_CORSO' ? 'In corso' : 'Completato'}
           </span>
         </div>
-        {canStart && (
-          <Button isLoading={startProcess.isPending} onClick={() => startProcess.mutate()}>
-            ▶ Avvia processo
-          </Button>
+        {/* Mostra il bottone finché il processo è in BOZZA, anche se disabilitato */}
+        {isBozza && (
+          <div className="flex flex-col items-end gap-1.5">
+            <Button
+              isLoading={startProcess.isPending}
+              disabled={!canStart}
+              onClick={() => canStart && startProcess.mutate()}
+            >
+              ▶ Avvia processo
+            </Button>
+            {startBlockReason && (
+              <p className="text-xs text-amber-400 text-right max-w-48">{startBlockReason}</p>
+            )}
+          </div>
         )}
       </div>
 
