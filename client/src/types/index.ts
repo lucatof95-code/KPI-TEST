@@ -131,6 +131,11 @@ export interface AppSettings {
   smtp_from_name: string
   smtp_from_email: string
   app_url: string
+  email_header_subtitle: string
+  email_header_title: string
+  email_body_outro: string
+  email_cta_text: string
+  email_footer_disclaimer: string
 }
 
 export interface CalendarEventInput {

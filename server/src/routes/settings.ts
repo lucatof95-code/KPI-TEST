@@ -7,7 +7,10 @@ import { authenticate, requireMaster, AuthRequest } from '../middleware/auth'
 const router = Router()
 router.use(authenticate, requireMaster)
 
-const KEYS = ['smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'smtp_from_name', 'smtp_from_email', 'app_url'] as const
+const KEYS = [
+  'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'smtp_from_name', 'smtp_from_email', 'app_url',
+  'email_header_subtitle', 'email_header_title', 'email_body_outro', 'email_cta_text', 'email_footer_disclaimer',
+] as const
 
 router.get('/', async (_req: AuthRequest, res: Response) => {
   const rows = await prisma.setting.findMany()
@@ -27,6 +30,11 @@ const updateSchema = z.object({
   smtp_from_name: z.string(),
   smtp_from_email: z.string(),
   app_url: z.string().url('URL non valido').or(z.literal('')),
+  email_header_subtitle: z.string(),
+  email_header_title: z.string(),
+  email_body_outro: z.string(),
+  email_cta_text: z.string(),
+  email_footer_disclaimer: z.string(),
 }).partial()
 
 router.put('/', async (req: AuthRequest, res: Response) => {

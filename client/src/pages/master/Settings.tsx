@@ -6,6 +6,66 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { useGlobalToast } from '../../components/layout/Layout'
 
+function EmailPreview({ form }: { form: AppSettings }) {
+  const subtitle = form.email_header_subtitle || 'KPI FORMAZIONE ERP'
+  const title = form.email_header_title || 'Nuove attività assegnate'
+  const outro = form.email_body_outro || 'Accedi alla piattaforma per visualizzare i dettagli e completarle entro le scadenze previste.'
+  const cta = form.email_cta_text || 'Vai alle attività →'
+  const pmName = form.smtp_from_name || 'Il tuo PM'
+  const disclaimer = form.email_footer_disclaimer || 'Questa email è stata inviata automaticamente dal sistema KPI Formazione ERP.'
+
+  return (
+    <div className="bg-gray-950 border border-gray-700 rounded-xl p-4 mt-4">
+      <p className="text-xs text-gray-500 mb-3 uppercase tracking-wide">Anteprima email</p>
+      <div className="bg-gray-100 rounded-lg overflow-hidden max-w-md mx-auto text-sm shadow-lg">
+        {/* Header */}
+        <div className="bg-blue-700 px-6 py-5">
+          <p className="text-blue-200 text-xs tracking-widest uppercase mb-1">{subtitle}</p>
+          <p className="text-white font-bold text-lg">{title}</p>
+        </div>
+        {/* Body */}
+        <div className="px-6 py-5 bg-white">
+          <p className="text-gray-800 mb-3">Ciao <strong>Mario Rossi</strong>,</p>
+          <p className="text-gray-600 mb-4 leading-relaxed">
+            hai <strong>2 nuove attività assegnate</strong> sul nuovo gestionale ERP: 1 di <strong>formazione</strong> e 1 di <strong>test</strong>.
+          </p>
+          <p className="text-gray-600 mb-5 leading-relaxed">{outro}</p>
+          <div className="text-center">
+            <span className="inline-block bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold text-sm">
+              {cta}
+            </span>
+          </div>
+        </div>
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-200 bg-white">
+          <p className="text-gray-500 text-xs">{pmName}</p>
+          <p className="text-gray-400 text-xs mt-1">{disclaimer}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Textarea({ label, hint, value, onChange }: {
+  label: string
+  hint?: string
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-gray-300">{label}</label>
+      <textarea
+        value={value}
+        onChange={onChange}
+        rows={2}
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+      />
+      {hint && <p className="text-xs text-gray-500">{hint}</p>}
+    </div>
+  )
+}
+
 export default function Settings() {
   const qc = useQueryClient()
   const { addToast } = useGlobalToast()
@@ -15,17 +75,25 @@ export default function Settings() {
   const [form, setForm] = useState<AppSettings>({
     smtp_host: '', smtp_port: '587', smtp_secure: 'false',
     smtp_user: '', smtp_pass: '', smtp_from_name: '', smtp_from_email: '', app_url: '',
+    email_header_subtitle: 'KPI FORMAZIONE ERP',
+    email_header_title: 'Nuove attività assegnate',
+    email_body_outro: 'Accedi alla piattaforma per visualizzare i dettagli e completarle entro le scadenze previste.',
+    email_cta_text: 'Vai alle attività →',
+    email_footer_disclaimer: 'Questa email è stata inviata automaticamente dal sistema KPI Formazione ERP.',
   })
   const [showPass, setShowPass] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
   const [testEmail, setTestEmail] = useState('')
   const [testLoading, setTestLoading] = useState(false)
 
   useEffect(() => {
-    if (data) setForm({ ...form, ...data })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (data) setForm((prev) => ({ ...prev, ...data }))
   }, [data])
 
   const f = (key: keyof AppSettings) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, [key]: e.target.value }))
+
+  const ft = (key: keyof AppSettings) => (e: React.ChangeEvent<HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   const save = useMutation({
@@ -155,7 +223,7 @@ export default function Settings() {
               </button>
             </div>
             {form.smtp_pass === '__SET__' && (
-              <p className="text-xs text-emerald-500">✓ Password impostata. Lascia il campo vuoto per mantenerla invariata.</p>
+              <p className="text-xs text-emerald-500">Password impostata. Lascia il campo vuoto per mantenerla invariata.</p>
             )}
             <p className="text-xs text-gray-500">Per Gmail usa una App Password (non la password principale)</p>
           </div>
@@ -174,9 +242,65 @@ export default function Settings() {
         />
       </section>
 
+      {/* Template email */}
+      <section className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Template email notifica</h2>
+          <button
+            type="button"
+            onClick={() => setShowPreview((v) => !v)}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            {showPreview ? 'Nascondi anteprima' : 'Mostra anteprima'}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Sottotitolo intestazione"
+            placeholder="KPI FORMAZIONE ERP"
+            value={form.email_header_subtitle}
+            onChange={f('email_header_subtitle')}
+            hint="Testo piccolo in cima all'email (sfondo blu)"
+            className="col-span-2"
+          />
+          <Input
+            label="Titolo intestazione"
+            placeholder="Nuove attività assegnate"
+            value={form.email_header_title}
+            onChange={f('email_header_title')}
+            hint="Titolo principale dell'email (sfondo blu)"
+            className="col-span-2"
+          />
+          <div className="col-span-2">
+            <Textarea
+              label="Testo prima del pulsante"
+              hint="Istruzioni mostrate all'utente prima del link di accesso"
+              value={form.email_body_outro}
+              onChange={ft('email_body_outro')}
+            />
+          </div>
+          <Input
+            label="Testo pulsante"
+            placeholder="Vai alle attività →"
+            value={form.email_cta_text}
+            onChange={f('email_cta_text')}
+            hint="Etichetta del pulsante di accesso"
+            className="col-span-2"
+          />
+          <div className="col-span-2">
+            <Textarea
+              label="Nota a piè di pagina"
+              hint="Testo disclaimer in fondo all'email"
+              value={form.email_footer_disclaimer}
+              onChange={ft('email_footer_disclaimer')}
+            />
+          </div>
+        </div>
+        {showPreview && <EmailPreview form={form} />}
+      </section>
+
       {/* Actions */}
       <div className="flex items-center justify-between gap-4">
-        {/* Test connection */}
         <div className="flex items-center gap-2 flex-1">
           <Input
             placeholder="email-test@azienda.it"

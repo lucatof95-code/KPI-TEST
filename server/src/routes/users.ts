@@ -2,6 +2,7 @@ import { parseId } from '../lib/parseId'
 import { Router, Response } from 'express'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { authenticate, requireMaster, AuthRequest } from '../middleware/auth'
 
@@ -67,9 +68,19 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
   const id = parseId(req.params.id, res); if (id === null) return
   if (req.user?.userId === id) { res.status(400).json({ error: 'Non puoi eliminare te stesso' }); return }
   try {
-    await prisma.user.delete({ where: { id } })
+    await prisma.$transaction([
+      prisma.processStepUser.deleteMany({ where: { userId: id } }),
+      prisma.report.deleteMany({ where: { userId: id } }),
+      prisma.assignment.deleteMany({ where: { userId: id } }),
+      prisma.user.delete({ where: { id } }),
+    ])
     res.status(204).send()
-  } catch { res.status(404).json({ error: 'Utente non trovato' }) }
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      res.status(404).json({ error: 'Utente non trovato' }); return
+    }
+    res.status(500).json({ error: 'Errore durante l\'eliminazione' })
+  }
 })
 
 export default router

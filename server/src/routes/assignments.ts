@@ -196,7 +196,7 @@ router.post('/notify', requireMaster, async (req: AuthRequest, res: Response) =>
       formazione: userAssignments.filter((a) => a.activity.tipo === 'FORMAZIONE').length,
       test: userAssignments.filter((a) => a.activity.tipo === 'TEST').length,
     }
-    const emailData = buildNotificationEmail(user.nome, user.cognome, counts, cfg.appUrl, cfg.fromName)
+    const emailData = buildNotificationEmail(user.nome, user.cognome, counts, cfg)
     try {
       await sendMail({ to: user.email, ...emailData, icsAttachment: icsContent })
       results.push({ userId: user.id, email: user.email, ok: true })
